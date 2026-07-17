@@ -853,17 +853,7 @@ function placeMarker(prop, location) {
 
   const staffName = assign ? assign.staffName : '';
   const otherCount = prop.other_company || '';
-  const svg = createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount);
-  const baseW = isKouji ? 18 : 22;
-  const nameW = staffName ? Math.min(staffName.length, 4) * 11 + 10 : 0;
-  const hasOther = otherCount && String(otherCount).trim() !== '' && String(otherCount).trim() !== '0';
-  const iconW = baseW + nameW + (hasOther ? 18 : 0) + 6;
-  const iconAnchorX = nameW + 3 + (isKouji ? 9 : 11);
-  const icon = {
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(iconW, 60),
-    anchor: new google.maps.Point(iconAnchorX, isKouji ? 54 : 46),
-  };
+  const icon = buildMarkerIcon(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, null);
 
   const marker = new google.maps.Marker({
     position: location,
@@ -924,88 +914,122 @@ function placeMarker(prop, location) {
   return entry;
 }
 
+function brightenHex(hex, amt = 28) {
+  if (!hex || !hex.startsWith('#') || hex.length < 7) return hex;
+  const r = Math.min(255, parseInt(hex.slice(1, 3), 16) + amt);
+  const g = Math.min(255, parseInt(hex.slice(3, 5), 16) + amt);
+  const b = Math.min(255, parseInt(hex.slice(5, 7), 16) + amt);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+function buildMarkerIcon(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, orderNum) {
+  const meta = createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, orderNum);
+  return {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(meta.svg),
+    scaledSize: new google.maps.Size(meta.width, meta.height),
+    anchor: new google.maps.Point(meta.anchorX, meta.anchorY),
+  };
+}
+
 function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, orderNum) {
-  // ピン本体の幅（少し細く）・中心X
-  const pinW = isKouji ? 18 : 22;
-  const pinCX = pinW / 2;
+  const PIN_W = isKouji ? 22 : 28;
+  const STROKE = 3;
+  const TOP_PAD = 8;
+  const SIDE_PAD = 8;
 
-  // ラベル用の追加スペース計算
-  // 左上: 担当者名（最大4文字、1文字=11px、フォント拡大）
   const nameText = staffName ? staffName.slice(0, 4) : '';
-  const nameW = nameText.length * 11;
-  // 右上: 他社数バッジ（丸数字、フォント拡大で幅18px）
+  const nameBadgeH = 22;
+  const nameBadgeW = nameText ? Math.max(nameText.length * 14 + 18, 42) : 0;
+
   const hasOther = otherCount !== null && otherCount !== undefined && String(otherCount).trim() !== '' && String(otherCount).trim() !== '0';
+  let otherLabel = '';
+  if (hasOther) {
+    const raw = String(otherCount).trim();
+    if (/5\s*以上/.test(raw)) otherLabel = '5+';
+    else {
+      const n = parseInt(raw, 10);
+      otherLabel = (!isNaN(n) && n > 0) ? String(Math.min(n, 99)) : '!';
+    }
+  }
+  const OTHER_R = 12;
 
-  // SVG全体の幅: ピン + 左ラベル張り出し + 右バッジ張り出し + 太い縁線分の余白
-  const strokePad = 3; // 6px線の半分がクリップされないよう左右に余白
-  const leftExtra = (nameText ? nameW + 4 : 0) + strokePad;
-  const rightExtra = (hasOther ? 18 : 0) + strokePad;
-  const totalW = pinW + leftExtra + rightExtra;
-  const pinOffsetX = leftExtra; // ピン本体の左端X座標
+  const badgeRowH = Math.max(nameText ? nameBadgeH + 6 : 0, hasOther ? OTHER_R * 2 + 6 : 0);
+  const pinTop = TOP_PAD + badgeRowH;
+  const pinTipY = pinTop + (isKouji ? 48 : 44);
 
-  // 他社数を丸数字に変換（1〜20対応、それ以上は●）
-  const circledNums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
-  const otherNum = parseInt(otherCount);
-  const otherBadge = (!isNaN(otherNum) && otherNum >= 1 && otherNum <= 20)
-    ? circledNums[otherNum - 1]
-    : (hasOther ? '●' : '');
+  const leftPad = SIDE_PAD + (nameText ? Math.max(0, nameBadgeW * 0.45) : 0);
+  const rightPad = SIDE_PAD + (hasOther ? OTHER_R + 10 : 0);
+  const pinCX = leftPad + PIN_W / 2;
 
-  // ピン本体パス（細め・pinOffsetX分ずらす）
-  const px = pinOffsetX;
-  const half = pinW / 2;
+  const totalW = leftPad + PIN_W + rightPad;
+  const totalH = pinTipY + 6;
+
+  const anchorX = pinCX;
+  const anchorY = pinTipY;
+
+  const half = PIN_W / 2;
+  const px = pinCX - half;
+  const uid = 'm' + Math.random().toString(36).slice(2, 9);
+
   const pinPath = isKouji
-    ? `M${px+half} 10 C${px+half-6} 10 ${px+1} 16 ${px+1} 21 C${px+1} 32 ${px+half} 54 ${px+half} 54 C${px+half} 54 ${px+pinW-1} 32 ${px+pinW-1} 21 C${px+pinW-1} 16 ${px+half+6} 10 ${px+half} 10 Z`
-    : `M${px+half} 2 C${px+half-9} 2 ${px+2} 9 ${px+2} 15 C${px+2} 26 ${px+half} 46 ${px+half} 46 C${px+half} 46 ${px+pinW-2} 26 ${px+pinW-2} 15 C${px+pinW-2} 9 ${px+half+9} 2 ${px+half} 2 Z`;
+    ? `M${pinCX} ${pinTop + 6} C${pinCX - half + 3} ${pinTop + 6} ${px + 2} ${pinTop + 14} ${px + 2} ${pinTop + 22} C${px + 2} ${pinTop + 34} ${pinCX} ${pinTipY} ${pinCX} ${pinTipY} C${pinCX} ${pinTipY} ${px + PIN_W - 2} ${pinTop + 34} ${px + PIN_W - 2} ${pinTop + 22} C${px + PIN_W - 2} ${pinTop + 14} ${pinCX + half - 3} ${pinTop + 6} ${pinCX} ${pinTop + 6} Z`
+    : `M${pinCX} ${pinTop + 4} C${pinCX - half + 2} ${pinTop + 4} ${px + 3} ${pinTop + 11} ${px + 3} ${pinTop + 18} C${px + 3} ${pinTop + 28} ${pinCX} ${pinTipY} ${pinCX} ${pinTipY} C${pinCX} ${pinTipY} ${px + PIN_W - 3} ${pinTop + 28} ${px + PIN_W - 3} ${pinTop + 18} C${px + PIN_W - 3} ${pinTop + 11} ${pinCX + half - 2} ${pinTop + 4} ${pinCX} ${pinTop + 4} Z`;
 
-  // 訪問順バッジ（ピン下部に重ねて表示）
-  const orderSVG = orderNum ? (() => {
-    const cx = px + half;
-    const cy = isKouji ? 44 : 38;
-    const r = 9;
-    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#1a73e8" stroke="white" stroke-width="1.5"/>
-    <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="sans-serif">${orderNum}</text>`;
-  })() : '';
+  const strokeColor = keyWarning ? '#c62828' : (isKouji ? '#111' : borderColor);
+  const pinFill = isKouji ? '#1e1e2e' : fillColor;
+  const pinFillTop = isKouji ? '#4a4a6a' : brightenHex(fillColor);
 
-  const svgH = 60; // ラベル拡大＋太い縁線に合わせて余白増やす
-  const anchorY = isKouji ? 54 : 46;
-
-  // ラベルSVGパーツ（フォント拡大）。工事中ピン(黒)の上では背景と被らない色にする
-  const nameLabelBg = isKouji ? 'rgba(255,255,255,0.92)' : 'rgba(20,20,20,0.8)';
-  const nameLabelTextColor = isKouji ? '#111111' : '#ffffff';
-  const nameLabelStroke = isKouji ? 'stroke="#222" stroke-width="1"' : '';
-  const nameSVG = nameText ? `
-    <rect x="0" y="0" width="${nameW + 6}" height="17" rx="3" fill="${nameLabelBg}" ${nameLabelStroke}/>
-    <text x="${(nameW+6)/2}" y="13" text-anchor="middle" font-size="13" font-weight="bold" fill="${nameLabelTextColor}" font-family="sans-serif">${nameText}</text>` : '';
-
-  const otherSVG = otherBadge ? `
-    <circle cx="${totalW - rightExtra/2 - 1}" cy="9" r="9" fill="#e53935" stroke="#ffffff" stroke-width="1.5"/>
-    <text x="${totalW - rightExtra/2 - 1}" y="13" text-anchor="middle" font-size="13" font-weight="900" font-family="sans-serif" fill="#000000">${otherBadge}</text>` : '';
-
-  // ピン内部アイコン
   let pinInner = '';
   if (isKouji) {
-    pinInner = `<text x="${px+half}" y="${10+15}" text-anchor="middle" font-size="10" font-weight="bold" fill="white" font-family="sans-serif">工</text>`;
+    pinInner = `<text x="${pinCX}" y="${pinTop + 22}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">工</text>`;
   } else if (keyWarning) {
-    pinInner = `<text x="${px+half}" y="22" text-anchor="middle" font-size="13" font-family="sans-serif">⚠️</text>`;
+    pinInner = `<text x="${pinCX}" y="${pinTop + 22}" text-anchor="middle" font-size="14" font-family="sans-serif">⚠</text>`;
   } else if (isKarikari) {
-    pinInner = `<text x="${px+half}" y="22" text-anchor="middle" font-size="12" font-family="sans-serif">🔑</text>`;
+    pinInner = `<text x="${pinCX}" y="${pinTop + 22}" text-anchor="middle" font-size="13" font-family="sans-serif">🔑</text>`;
   } else {
-    pinInner = `<circle cx="${px+half}" cy="14" r="5" fill="white" opacity="0.85"/>`;
+    pinInner = `<circle cx="${pinCX}" cy="${pinTop + 18}" r="5.5" fill="#fff" opacity="0.95"/>`;
   }
 
-  // ピン枠線色（太く）
-  const strokeColor = keyWarning ? '#e74c3c' : borderColor;
-  const strokeW = keyWarning ? 6 : (isKouji ? 4 : 6);
-  const pinFill = isKouji ? '#222222' : fillColor;
-  const pinStroke = isKouji ? '#000000' : strokeColor;
+  const nameX = pinCX - nameBadgeW / 2 - (hasOther ? 8 : 0);
+  const nameY = TOP_PAD;
+  const nameSVG = nameText ? `
+    <rect x="${nameX}" y="${nameY}" width="${nameBadgeW}" height="${nameBadgeH}" rx="11" fill="#1a1a2e" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <text x="${nameX + nameBadgeW / 2}" y="${nameY + 15}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">${nameText}</text>` : '';
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${svgH}" viewBox="0 0 ${totalW} ${svgH}">
-    <path d="${pinPath}" fill="${pinFill}" stroke="${pinStroke}" stroke-width="${strokeW}"/>
-    ${pinInner}
-    ${orderSVG}
+  const otherCX = pinCX + half + 4;
+  const otherCY = pinTop + 12;
+  const otherFontSize = otherLabel.length > 1 ? 10 : 13;
+  const otherSVG = hasOther ? `
+    <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R}" fill="#fff" stroke="#e53935" stroke-width="2.5"/>
+    <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R - 4}" fill="#e53935"/>
+    <text x="${otherCX}" y="${otherCY + (otherLabel.length > 1 ? 3.5 : 4.5)}" text-anchor="middle" font-size="${otherFontSize}" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${otherLabel}</text>` : '';
+
+  const orderCX = pinCX;
+  const orderCY = pinTipY - 4;
+  const orderSVG = orderNum ? `
+    <circle cx="${orderCX}" cy="${orderCY}" r="10" fill="#1565c0" stroke="#fff" stroke-width="2"/>
+    <text x="${orderCX}" y="${orderCY + 4}" text-anchor="middle" font-size="11" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${orderNum}</text>` : '';
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">
+    <defs>
+      <filter id="${uid}sh" x="-25%" y="-15%" width="150%" height="150%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#000" flood-opacity="0.32"/>
+      </filter>
+      <linearGradient id="${uid}g" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${pinFillTop}"/>
+        <stop offset="100%" stop-color="${pinFill}"/>
+      </linearGradient>
+    </defs>
+    <g filter="url(#${uid}sh)">
+      <path d="${pinPath}" fill="url(#${uid}g)" stroke="${strokeColor}" stroke-width="${STROKE}" stroke-linejoin="round"/>
+      ${pinInner}
+    </g>
     ${nameSVG}
     ${otherSVG}
+    ${orderSVG}
   </svg>`;
+
+  return { svg, width: totalW, height: totalH, anchorX, anchorY };
 }
 
 // =============================================
@@ -1206,17 +1230,7 @@ function updateMarkerColor(prop) {
   const staffName2 = assign ? assign.staffName : '';
   const otherCount2 = prop.other_company || '';
   const orderNum = entry._orderNum || null;
-  const svg = createMarkerSVG(color, borderColor, prop.is_kouji, isKarikari, keyWarning, staffName2, otherCount2, orderNum);
-  const baseW2 = prop.is_kouji ? 18 : 22;
-  const nameW2 = staffName2 ? Math.min(staffName2.length, 4) * 11 + 10 : 0;
-  const hasOther2 = otherCount2 && String(otherCount2).trim() !== '' && String(otherCount2).trim() !== '0';
-  const iconW2 = baseW2 + nameW2 + (hasOther2 ? 18 : 0) + 6;
-  const iconAX2 = nameW2 + 3 + (prop.is_kouji ? 9 : 11);
-  entry.marker.setIcon({
-    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-    scaledSize: new google.maps.Size(iconW2, 60),
-    anchor: new google.maps.Point(iconAX2, prop.is_kouji ? 54 : 46),
-  });
+  entry.marker.setIcon(buildMarkerIcon(color, borderColor, prop.is_kouji, isKarikari, keyWarning, staffName2, otherCount2, orderNum));
   entry.marker.setZIndex(assign ? 10 : 5);
 }
 
