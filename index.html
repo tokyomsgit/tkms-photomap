@@ -8,18 +8,29 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; display: flex; height: 100dvh; overflow: hidden; background: #f0f2f5; }
 
-  /* ===== サイドバー（PC: 左固定 / SP: 下ドロワー） ===== */
+  /* ===== サイドバー（PC/SP: ドロワー・デフォルト非表示） ===== */
   #sidebar {
-    width: 240px; min-width: 240px; background: #fff; display: flex; flex-direction: column;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.12); z-index: 100; overflow-y: auto;
-    transition: transform 0.3s ease;
+    position: fixed; left: 0; top: 0; bottom: 0;
+    width: 260px; background: #fff; display: flex; flex-direction: column;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15); z-index: 200; overflow-y: auto;
+    transform: translateX(-100%);
+    transition: transform 0.28s ease;
   }
+  #sidebar.open { transform: translateX(0); }
   #sidebar-header {
     padding: 14px 12px 10px; border-bottom: 1px solid #e8e8e8; background: #fff;
     position: sticky; top: 0; z-index: 10;
   }
-  #sidebar-header h2 { font-size: 13px; color: #666; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .sidebar-header-top {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  }
+  #sidebar-header h2 { font-size: 13px; color: #666; font-weight: 600; display: flex; align-items: center; gap: 6px; margin: 0; }
   #sidebar-header h2::before { content: '👤'; }
+  #btn-sidebar-close {
+    background: #f1f3f4; border: none; border-radius: 6px; width: 28px; height: 28px;
+    font-size: 14px; color: #666; cursor: pointer; line-height: 1;
+  }
+  #btn-sidebar-close:hover { background: #e8eaed; color: #333; }
 
   /* 担当者追加フォーム */
   .add-staff-form { display: flex; gap: 4px; margin-bottom: 6px; }
@@ -81,19 +92,49 @@
   #current-staff-badge:hover { opacity: 0.9; }
 
   /* ===== メインエリア ===== */
-  #main { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  #main { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; width: 100%; min-width: 0; }
 
-  /* トップバー */
+  /* トップバー（2段構成） */
   #topbar {
+    display: flex; flex-direction: column;
+    background: #fff; border-bottom: 1px solid #e0e0e0; z-index: 90;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08); flex-shrink: 0;
+  }
+  #topbar-row1 {
     display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-    background: #fff; border-bottom: 1px solid #e0e0e0; z-index: 50; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
     flex-wrap: nowrap;
+  }
+  #topbar-row2 {
+    padding: 6px 12px 8px; background: #f8f9fb; border-top: 1px solid #eef0f3;
   }
   #topbar h1 { font-size: 15px; font-weight: 700; color: #202124; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
   #topbar h1 span.cam { font-size: 16px; }
   .badge-count { background: #4285f4; color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
   .badge-update { font-size: 10px; color: #888; white-space: nowrap; }
   .topbar-spacer { flex: 1; }
+
+  /* 担当者フィルタチップ */
+  #staff-chips {
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch; padding: 2px 0;
+  }
+  #staff-chips::-webkit-scrollbar { display: none; }
+  .staff-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 12px; border-radius: 20px; border: 2px solid #e8eaed;
+    background: #fff; font-size: 12px; font-weight: 600; color: #444;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06); transition: all 0.15s;
+    font-family: inherit;
+  }
+  .staff-chip:hover { border-color: #c5cae9; background: #f8f9ff; }
+  .staff-chip.active {
+    border-color: transparent; color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  }
+  .staff-chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .staff-chip.active .staff-chip-dot { background: #fff !important; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  .staff-chip-all.active { background: #4285f4; border-color: #4285f4; }
 
   /* モードボタン */
   .mode-btn {
@@ -111,7 +152,7 @@
 
   /* ===== 担当者ビューパネル ===== */
   #list-panel {
-    display: none; position: absolute; top: 0; right: 0; bottom: 0;
+    display: none; position: absolute; top: var(--topbar-h, 86px); right: 0; bottom: 0;
     width: 320px; background: #fff; z-index: 80;
     box-shadow: -2px 0 12px rgba(0,0,0,0.15);
     flex-direction: column; overflow: hidden;
@@ -195,18 +236,14 @@
     }
   }
 
-  /* 担当者フィルタ */
-  #staff-filter {
-    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff;
-    font-size: 12px; color: #555; cursor: pointer; max-width: 130px;
-  }
-  #staff-filter:focus { outline: none; border-color: #4285f4; }
-
-  /* ハンバーガーボタン（SP用） */
+  /* ハンバーガーボタン */
   #btn-menu {
-    display: none; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
     background: #fff; font-size: 18px; cursor: pointer; line-height: 1; color: #555;
+    flex-shrink: 0;
   }
+  #btn-menu:hover { background: #f5f5f5; }
 
   /* 地図 */
   #map { flex: 1; width: 100%; }
@@ -358,7 +395,7 @@
 
     /* サイドバーをボトムドロワーに */
     #sidebar {
-      position: fixed; left: 0; right: 0; bottom: 0;
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto;
       width: 100%; min-width: unset;
       max-height: 70dvh;
       border-radius: 16px 16px 0 0;
@@ -381,13 +418,11 @@
     /* メインを全画面に */
     #main { flex: 1; height: 100dvh; }
 
-    /* トップバーをコンパクトに */
-    #topbar { padding: 8px 8px; gap: 4px; }
+    #topbar-row1 { padding: 8px 8px; gap: 4px; }
+    #topbar-row2 { padding: 4px 8px 6px; }
     #topbar h1 { font-size: 13px; }
     #topbar h1 .cam { display: none; }
     .badge-update { display: none; }
-    #btn-menu { display: block; }
-    #staff-filter { max-width: 84px; font-size: 11px; padding: 6px 4px; }
 
     /* ドラッグヒントをSPでは非表示（タップで選択なので） */
     #drag-hint { display: none; }
@@ -447,7 +482,10 @@
 <!-- ===== サイドバー ===== -->
 <div id="sidebar">
   <div id="sidebar-header">
-    <h2>担当者</h2>
+    <div class="sidebar-header-top">
+      <h2>担当者</h2>
+      <button id="btn-sidebar-close" type="button" onclick="closeSidebar()" title="閉じる">✕</button>
+    </div>
     <div class="add-staff-form">
       <input type="text" id="new-staff-name" placeholder="名前を追加" maxlength="8">
       <button class="btn-add" onclick="addStaff()">追加</button>
@@ -479,17 +517,19 @@
 <!-- ===== メイン ===== -->
 <div id="main">
   <div id="topbar">
-    <button id="btn-menu" onclick="toggleSidebar()">☰</button>
-    <h1><span class="cam">📷</span> 撮影MAP <span class="badge-count" id="prop-count">0</span>件</h1>
-    <span class="badge-update" id="update-time"></span>
-    <select id="staff-filter" onchange="applyStaffFilter(this.value)">
-      <option value="">👤 全員表示</option>
-    </select>
-    <div class="topbar-spacer"></div>
-    <button class="mode-btn active" id="btn-normal" onclick="setMode('normal')">🗺 通常</button>
-    <button class="mode-btn" id="btn-nav" onclick="setMode('nav')">🧭 ナビ</button>
-    <button class="mode-btn" id="btn-list" onclick="setMode('list')">📋 リスト</button>
-    <button class="btn-refresh" onclick="refreshData()">🔄</button>
+    <div id="topbar-row1">
+      <button id="btn-menu" type="button" onclick="toggleSidebar()" title="担当者メニュー">☰</button>
+      <h1><span class="cam">📷</span> 撮影MAP <span class="badge-count" id="prop-count">0</span>件</h1>
+      <span class="badge-update" id="update-time"></span>
+      <div class="topbar-spacer"></div>
+      <button class="mode-btn active" id="btn-normal" onclick="setMode('normal')">🗺 通常</button>
+      <button class="mode-btn" id="btn-nav" onclick="setMode('nav')">🧭 ナビ</button>
+      <button class="mode-btn" id="btn-list" onclick="setMode('list')">📋 リスト</button>
+      <button class="btn-refresh" type="button" onclick="refreshData()">🔄</button>
+    </div>
+    <div id="topbar-row2">
+      <div id="staff-chips"></div>
+    </div>
   </div>
 
   <div id="nav-bar">
@@ -530,7 +570,7 @@
   <div id="list-panel">
     <div id="list-panel-header">
       <span id="list-panel-title">📋 担当者リスト</span>
-      <select id="list-staff-select" onchange="renderListPanel(this.value)">
+      <select id="list-staff-select" onchange="onListStaffChange(this.value)">
         <option value="">👤 担当者を選択</option>
       </select>
       <button id="btn-list-close" onclick="setMode('normal')">✕</button>
@@ -735,7 +775,10 @@ async function initMap() {
 
   geocodeAndPlaceMarkers();
   document.getElementById('prop-count').textContent = propertiesData.length;
+  syncTopbarHeight();
 }
+
+window.addEventListener('resize', syncTopbarHeight);
 
 // =============================================
 // ジオコーディング & マーカー配置
@@ -1377,7 +1420,7 @@ function renderStaffList() {
     });
     list.appendChild(div);
   });
-  renderStaffFilterOptions();
+  renderStaffChips();
 }
 
 // =============================================
@@ -1385,28 +1428,50 @@ function renderStaffList() {
 // =============================================
 let activeStaffFilter = ''; // 選択中の担当者ID（空文字=全員表示）
 
-function renderStaffFilterOptions() {
-  const sel = document.getElementById('staff-filter');
-  if (!sel) return;
-  const prevValue = sel.value;
-  sel.innerHTML = '<option value="">👤 全員表示</option>';
-  staffList.forEach(staff => {
-    const opt = document.createElement('option');
-    opt.value = staff.id;
-    opt.textContent = staff.name;
-    sel.appendChild(opt);
-  });
-  // 以前の選択が依然リストにあれば復元
-  if (prevValue && staffList.some(s => s.id === prevValue)) {
-    sel.value = prevValue;
-  } else if (prevValue && prevValue !== '') {
-    // 選んでいた担当者が削除された場合はフィルタ解除
+function renderStaffChips() {
+  const container = document.getElementById('staff-chips');
+  if (!container) return;
+
+  if (activeStaffFilter && !staffList.some(s => s.id === activeStaffFilter)) {
     activeStaffFilter = '';
-    sel.value = '';
+    markers.forEach(entry => {
+      entry.marker.setVisible(true);
+      if (entry.keyMarker) entry.keyMarker.setVisible(true);
+      if (entry.keyLine) entry.keyLine.setVisible(true);
+    });
+  }
+
+  container.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.className = 'staff-chip staff-chip-all' + (activeStaffFilter === '' ? ' active' : '');
+  allBtn.textContent = '全員';
+  allBtn.onclick = () => applyStaffFilter('');
+  container.appendChild(allBtn);
+
+  staffList.forEach(staff => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isActive = activeStaffFilter === staff.id;
+    btn.className = 'staff-chip' + (isActive ? ' active' : '');
+    if (isActive) btn.style.background = staff.color;
+    btn.innerHTML = `<span class="staff-chip-dot" style="background:${staff.color}"></span>${staff.name}`;
+    btn.onclick = () => applyStaffFilter(staff.id);
+    container.appendChild(btn);
+  });
+
+  syncTopbarHeight();
+}
+
+function syncTopbarHeight() {
+  const topbar = document.getElementById('topbar');
+  if (topbar) {
+    document.documentElement.style.setProperty('--topbar-h', topbar.offsetHeight + 'px');
   }
 }
 
-function applyStaffFilter(staffId) {
+function applyStaffFilter(staffId, options = {}) {
   activeStaffFilter = staffId;
   const staff = staffList.find(s => s.id === staffId);
   const targetName = staff ? staff.name : '';
@@ -1419,10 +1484,8 @@ function applyStaffFilter(staffId) {
       const assign = assignments[pid];
 
       if (sheetText) {
-        // スプシに撮影者が入っている → スプシの値のみで判定（assignmentsは無視）
         visible = sheetText.startsWith(targetName) || sheetText.includes(targetName);
       } else {
-        // スプシに撮影者が空 → MAP上で手動割り当てした場合のみ表示
         visible = !!(assign && assign.staffName === targetName);
       }
     }
@@ -1431,12 +1494,26 @@ function applyStaffFilter(staffId) {
     if (entry.keyLine) entry.keyLine.setVisible(visible);
   });
 
-  if (targetName) {
-    const visibleCount = markers.filter(m => m.marker.getVisible()).length;
-    showToast(`👤 ${targetName} の物件を表示中（${visibleCount}件）`);
-  } else {
-    showToast('👤 全員表示に戻しました');
+  if (!options.silent) {
+    if (targetName) {
+      const visibleCount = markers.filter(m => m.marker.getVisible()).length;
+      showToast(`👤 ${targetName} の物件を表示中（${visibleCount}件）`);
+    } else {
+      showToast('👤 全員表示に戻しました');
+    }
   }
+
+  renderStaffChips();
+
+  if (currentMode === 'list') {
+    const sel = document.getElementById('list-staff-select');
+    if (sel && sel.value !== staffId) sel.value = staffId || '';
+  }
+}
+
+function onListStaffChange(staffId) {
+  applyStaffFilter(staffId, { silent: true });
+  renderListPanel(staffId);
 }
 
 // 見やすいランダムカラーを生成（彩度・明度を固定して鮮やかな色のみ）
@@ -1478,6 +1555,7 @@ function addStaff() {
 }
 
 function removeStaff(id) {
+  if (activeStaffFilter === id) applyStaffFilter('');
   staffList = staffList.filter(s => s.id !== id);
   saveStaffToStorage();
   renderStaffList();
@@ -1499,6 +1577,7 @@ function setMode(mode) {
   document.getElementById('btn-list').classList.toggle('active', mode === 'list');
   document.getElementById('nav-bar').classList.toggle('visible', mode === 'nav');
   document.getElementById('list-panel').classList.toggle('visible', mode === 'list');
+  if (mode === 'list' || mode === 'nav') closeSidebar();
   if (mode === 'normal') {
     clearNavSelection();
     if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
@@ -1509,7 +1588,6 @@ function setMode(mode) {
   }
   if (mode === 'list') {
     updateListStaffSelect();
-    // フィルタ中の担当者があれば自動選択
     const sel = document.getElementById('list-staff-select');
     if (activeStaffFilter) {
       sel.value = activeStaffFilter;
@@ -1518,6 +1596,7 @@ function setMode(mode) {
       sel.value = staffList[0].id;
       renderListPanel(staffList[0].id);
     }
+    syncTopbarHeight();
   }
 }
 
@@ -2028,12 +2107,11 @@ function closeSidebar() {
   document.getElementById('sidebar-overlay').classList.remove('visible');
 }
 
-// 担当者選択後にSPではドロワーを閉じる
+// 担当者選択後にドロワーを閉じる
 function selectStaffAndClose(staff) {
   selectedStaff = staff;
   showCurrentBadge(staff);
-  // SP幅のときだけ閉じる
-  if (window.innerWidth <= 640) closeSidebar();
+  closeSidebar();
 }
 
 let toastTimer = null;
