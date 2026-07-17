@@ -565,32 +565,32 @@ const CONFIG = {
 // =============================================
 
 // スプレッドシートの列マッピング（A=0, B=1, C=2...）
-// 実際の列順: 物上|コピー|他社|撮影者|日付|バイク|写真入れた？|番手|図面|UP|メイン写真|メインキャッチ|R-DB|UP済|内容|文字数|備考|完成確認|時期|状況|鍵対応|確認|区|図面リンク|両片|物件名|部屋番号|売主業者|価格|㎡|単価|間取り|....|住所|電話番号|鍵住所|鍵時刻|鍵備考
+// 実際の列順: 物上|コピー|他社|撮影者|日付|バイク|写真入れた？|番手|図面|UP|メイン写真|メインキャッチ|R-DB|UP済|備考|完成確認|時期|状況|鍵対応|確認|区|図面リンク|両片|物件名|部屋番号|売主業者|価格|㎡|単価|間取り|平成昭和|年|S|O|住所|電話番号|鍵住所|鍵時刻|鍵備考
 const COL = {
   OTHER_COMPANY:  2,  // C: 他社
   PHOTOGRAPHER:   3,  // D: 撮影者
-  PERIOD:        18,  // S: 時期
-  STATUS:        19,  // T: 状況
-  KEY_TYPE:      20,  // U: 鍵対応
-  AREA:          22,  // W: 区
-  DRAWING_LINK:  23,  // X: 図面リンク
-  NAME:          25,  // Z: 物件名
-  ROOM:          26,  // AA: 部屋番号
-  PRICE:         28,  // AC: 価格
-  SQM:           29,  // AD: 面積(㎡)
-  PER_SQM:       30,  // AE: 単価
-  LAYOUT:        31,  // AF: 間取り
-  ADDRESS:       36,  // AK: 住所
-  TEL:           37,  // AL: 電話番号
-  KEY_ADDRESS:   38,  // AM: 鍵住所
-  KEY_TIME:      39,  // AN: 鍵時刻
-  IS_KOUJI:      -1,  // 該当列なし（常にfalse）
+  PERIOD:        16,  // Q: 時期
+  STATUS:        17,  // R: 状況
+  KEY_TYPE:      18,  // S: 鍵対応
+  AREA:          20,  // U: 区
+  DRAWING_LINK:  21,  // V: 図面リンク
+  NAME:          23,  // X: 物件名
+  ROOM:          24,  // Y: 部屋番号
+  PRICE:         26,  // AA: 価格
+  SQM:           27,  // AB: ㎡
+  PER_SQM:       28,  // AC: 単価
+  LAYOUT:        29,  // AD: 間取り
+  ADDRESS:       34,  // AI: 住所
+  TEL:           35,  // AJ: 電話番号
+  KEY_ADDRESS:   36,  // AK: 鍵住所
+  KEY_TIME:      37,  // AL: 鍵時刻
+  IS_KOUJI:      -1,  // 該当列なし（常にfalse、状況=工事中撮影可で判定）
 };
 
 async function loadFromSheet() {
   if (!CONFIG.SHEETS_API_KEY || !CONFIG.SPREADSHEET_ID) return null;
 
-  const range = encodeURIComponent(`${CONFIG.SHEET_NAME}!A${CONFIG.DATA_START_ROW}:AO${CONFIG.DATA_END_ROW}`);
+  const range = encodeURIComponent(`${CONFIG.SHEET_NAME}!A${CONFIG.DATA_START_ROW}:AM${CONFIG.DATA_END_ROW}`);
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${range}?key=${CONFIG.SHEETS_API_KEY}`;
 
   try {
