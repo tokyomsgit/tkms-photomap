@@ -8,15 +8,12 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; display: flex; height: 100dvh; overflow: hidden; background: #f0f2f5; }
 
-  /* ===== サイドバー（PC/SP: ドロワー・デフォルト非表示） ===== */
+  /* ===== サイドバー（PC: 左固定 / SP: 下ドロワー） ===== */
   #sidebar {
-    position: fixed; left: 0; top: 0; bottom: 0;
-    width: 260px; background: #fff; display: flex; flex-direction: column;
-    box-shadow: 4px 0 24px rgba(0,0,0,0.15); z-index: 200; overflow-y: auto;
-    transform: translateX(-100%);
-    transition: transform 0.28s ease;
+    width: 240px; min-width: 240px; background: #fff; display: flex; flex-direction: column;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.12); z-index: 100; overflow-y: auto;
+    flex-shrink: 0;
   }
-  #sidebar.open { transform: translateX(0); }
   #sidebar-header {
     padding: 14px 12px 10px; border-bottom: 1px solid #e8e8e8; background: #fff;
     position: sticky; top: 0; z-index: 10;
@@ -26,11 +23,7 @@
   }
   #sidebar-header h2 { font-size: 13px; color: #666; font-weight: 600; display: flex; align-items: center; gap: 6px; margin: 0; }
   #sidebar-header h2::before { content: '👤'; }
-  #btn-sidebar-close {
-    background: #f1f3f4; border: none; border-radius: 6px; width: 28px; height: 28px;
-    font-size: 14px; color: #666; cursor: pointer; line-height: 1;
-  }
-  #btn-sidebar-close:hover { background: #e8eaed; color: #333; }
+  #btn-sidebar-close { display: none; }
 
   /* 担当者追加フォーム */
   .add-staff-form { display: flex; gap: 4px; margin-bottom: 6px; }
@@ -236,14 +229,8 @@
     }
   }
 
-  /* ハンバーガーボタン */
-  #btn-menu {
-    display: flex; align-items: center; justify-content: center;
-    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
-    background: #fff; font-size: 18px; cursor: pointer; line-height: 1; color: #555;
-    flex-shrink: 0;
-  }
-  #btn-menu:hover { background: #f5f5f5; }
+  /* ハンバーガーボタン（SP用） */
+  #btn-menu { display: none; }
 
   /* 地図 */
   #map { flex: 1; width: 100%; }
@@ -255,6 +242,11 @@
   }
   #nav-bar.visible { display: flex; }
   #nav-selected { flex: 1; }
+  .btn-nav-load-order {
+    padding: 6px 12px; background: rgba(255,255,255,0.25); color: #fff; border: none; border-radius: 6px;
+    font-weight: 600; cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .btn-nav-load-order:hover { background: rgba(255,255,255,0.4); }
   .btn-nav-go {
     padding: 6px 16px; background: #fff; color: #1a73e8; border: none; border-radius: 6px;
     font-weight: 700; cursor: pointer; font-size: 13px;
@@ -425,6 +417,16 @@
     #topbar h1 { font-size: 13px; }
     #topbar h1 .cam { display: none; }
     .badge-update { display: none; }
+    #btn-menu {
+      display: flex; align-items: center; justify-content: center;
+      padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
+      background: #fff; font-size: 18px; cursor: pointer; line-height: 1; color: #555;
+      flex-shrink: 0;
+    }
+    #btn-sidebar-close {
+      display: block; background: #f1f3f4; border: none; border-radius: 6px;
+      width: 28px; height: 28px; font-size: 14px; color: #666; cursor: pointer; line-height: 1;
+    }
 
     /* ドラッグヒントをSPでは非表示（タップで選択なので） */
     #drag-hint { display: none; }
@@ -526,7 +528,6 @@
       <div class="topbar-spacer"></div>
       <button class="mode-btn active" id="btn-normal" onclick="setMode('normal')">🗺 通常</button>
       <button class="mode-btn" id="btn-nav" onclick="setMode('nav')">🧭 ナビ</button>
-      <button class="mode-btn" id="btn-list" onclick="setMode('list')">📋 リスト</button>
       <button class="btn-refresh" type="button" onclick="refreshData()">🔄</button>
     </div>
     <div id="topbar-row2">
@@ -555,6 +556,7 @@
         高速回避（一般道）
       </label>
       <!-- ボタン群 -->
+      <button class="btn-nav-load-order" id="btn-nav-load-order" onclick="loadVisitOrderToNav()">📋 リスト順→ルート</button>
       <button class="btn-nav-go" id="btn-nav-go" onclick="startNavigation()" disabled>🗺 ルート表示</button>
       <button class="btn-nav-go" id="btn-nav-gmaps" onclick="openInGoogleMaps()" disabled style="background:#34a853;">📱 Gマップで開く</button>
       <button class="btn-nav-clear" onclick="clearNavSelection()">クリア</button>
@@ -568,14 +570,14 @@
   <div id="map"></div>
   <div id="drop-overlay"></div>
 
-  <!-- ===== 担当者ビューパネル ===== -->
+  <!-- ===== ナビ：担当者リスト（右パネル） ===== -->
   <div id="list-panel">
     <div id="list-panel-header">
-      <span id="list-panel-title">📋 担当者リスト</span>
+      <span id="list-panel-title">📋 今日のルート</span>
       <select id="list-staff-select" onchange="onListStaffChange(this.value)">
         <option value="">👤 担当者を選択</option>
       </select>
-      <button id="btn-list-close" onclick="setMode('normal')">✕</button>
+      <button id="btn-list-close" onclick="setMode('normal')" title="通常モードに戻る">✕</button>
     </div>
     <div id="list-panel-body"></div>
   </div>
@@ -978,8 +980,8 @@ function buildMarkerIcon(fillColor, borderColor, isKouji, isKarikari, keyWarning
 }
 
 function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, orderNum) {
-  const PIN_W = isKouji ? 22 : 28;
-  const STROKE = 3;
+  const CRYSTAL_W = isKouji ? 20 : 28;
+  const STROKE = 2.5;
   const TOP_PAD = 8;
   const SIDE_PAD = 8;
 
@@ -1000,41 +1002,51 @@ function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning
   const OTHER_R = 12;
 
   const badgeRowH = Math.max(nameText ? nameBadgeH + 6 : 0, hasOther ? OTHER_R * 2 + 6 : 0);
+  const crystalH = isKouji ? 44 : 50;
   const pinTop = TOP_PAD + badgeRowH;
-  const pinTipY = pinTop + (isKouji ? 48 : 44);
+  const pinTipY = pinTop + crystalH;
+  const midY = pinTop + crystalH * 0.44;
 
   const leftPad = SIDE_PAD + (nameText ? Math.max(0, nameBadgeW * 0.45) : 0);
   const rightPad = SIDE_PAD + (hasOther ? OTHER_R + 10 : 0);
-  const pinCX = leftPad + PIN_W / 2;
+  const pinCX = leftPad + CRYSTAL_W / 2;
 
-  const totalW = leftPad + PIN_W + rightPad;
+  const totalW = leftPad + CRYSTAL_W + rightPad;
   const totalH = pinTipY + 6;
 
   const anchorX = pinCX;
   const anchorY = pinTipY;
 
-  const half = PIN_W / 2;
-  const px = pinCX - half;
+  const half = CRYSTAL_W / 2;
   const uid = 'm' + Math.random().toString(36).slice(2, 9);
 
-  const pinPath = isKouji
-    ? `M${pinCX} ${pinTop + 6} C${pinCX - half + 3} ${pinTop + 6} ${px + 2} ${pinTop + 14} ${px + 2} ${pinTop + 22} C${px + 2} ${pinTop + 34} ${pinCX} ${pinTipY} ${pinCX} ${pinTipY} C${pinCX} ${pinTipY} ${px + PIN_W - 2} ${pinTop + 34} ${px + PIN_W - 2} ${pinTop + 22} C${px + PIN_W - 2} ${pinTop + 14} ${pinCX + half - 3} ${pinTop + 6} ${pinCX} ${pinTop + 6} Z`
-    : `M${pinCX} ${pinTop + 4} C${pinCX - half + 2} ${pinTop + 4} ${px + 3} ${pinTop + 11} ${px + 3} ${pinTop + 18} C${px + 3} ${pinTop + 28} ${pinCX} ${pinTipY} ${pinCX} ${pinTipY} C${pinCX} ${pinTipY} ${px + PIN_W - 3} ${pinTop + 28} ${px + PIN_W - 3} ${pinTop + 18} C${px + PIN_W - 3} ${pinTop + 11} ${pinCX + half - 2} ${pinTop + 4} ${pinCX} ${pinTop + 4} Z`;
+  // ひし形クリスタル本体
+  const pinPath = `M${pinCX} ${pinTop} L${pinCX + half} ${midY} L${pinCX} ${pinTipY} L${pinCX - half} ${midY} Z`;
 
   const strokeColor = keyWarning ? '#c62828' : (isKouji ? '#111' : borderColor);
   const pinFill = isKouji ? '#1e1e2e' : fillColor;
-  const pinFillTop = isKouji ? '#4a4a6a' : brightenHex(fillColor);
+  const pinFillTop = isKouji ? '#6a6a8a' : brightenHex(fillColor);
+  const pinFillMid = isKouji ? '#3a3a52' : fillColor;
 
+  const iconCY = pinTop + crystalH * 0.30;
   let pinInner = '';
   if (isKouji) {
-    pinInner = `<text x="${pinCX}" y="${pinTop + 22}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">工</text>`;
+    pinInner = `<text x="${pinCX}" y="${iconCY + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">工</text>`;
   } else if (keyWarning) {
-    pinInner = `<text x="${pinCX}" y="${pinTop + 22}" text-anchor="middle" font-size="14" font-family="sans-serif">⚠</text>`;
+    pinInner = `<text x="${pinCX}" y="${iconCY + 5}" text-anchor="middle" font-size="13" font-family="sans-serif">⚠</text>`;
   } else if (isKarikari) {
-    pinInner = `<text x="${pinCX}" y="${pinTop + 22}" text-anchor="middle" font-size="13" font-family="sans-serif">🔑</text>`;
+    pinInner = `<text x="${pinCX}" y="${iconCY + 5}" text-anchor="middle" font-size="12" font-family="sans-serif">🔑</text>`;
   } else {
-    pinInner = `<circle cx="${pinCX}" cy="${pinTop + 18}" r="5.5" fill="#fff" opacity="0.95"/>`;
+    pinInner = `<circle cx="${pinCX}" cy="${iconCY}" r="4.5" fill="#fff" opacity="0.92"/>`;
   }
+
+  // クリスタル面取りハイライト
+  const facetInner = `
+    <path d="M${pinCX} ${pinTop + 2} L${pinCX - half * 0.55} ${midY - 1} L${pinCX} ${pinTipY - 6} Z" fill="rgba(255,255,255,0.22)"/>
+    <path d="M${pinCX} ${pinTop + 2} L${pinCX + half * 0.55} ${midY - 1} L${pinCX} ${pinTipY - 6} Z" fill="rgba(0,0,0,0.08)"/>
+    <line x1="${pinCX}" y1="${pinTop + 3}" x2="${pinCX}" y2="${pinTipY - 4}" stroke="rgba(255,255,255,0.28)" stroke-width="0.9"/>
+    <line x1="${pinCX - half * 0.7}" y1="${midY}" x2="${pinCX + half * 0.7}" y2="${midY}" stroke="rgba(255,255,255,0.18)" stroke-width="0.7"/>
+  `;
 
   const nameX = pinCX - nameBadgeW / 2 - (hasOther ? 8 : 0);
   const nameY = TOP_PAD;
@@ -1043,7 +1055,7 @@ function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning
     <text x="${nameX + nameBadgeW / 2}" y="${nameY + 15}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">${nameText}</text>` : '';
 
   const otherCX = pinCX + half + 4;
-  const otherCY = pinTop + 12;
+  const otherCY = pinTop + crystalH * 0.22;
   const otherFontSize = otherLabel.length > 1 ? 10 : 13;
   const otherSVG = hasOther ? `
     <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R}" fill="#fff" stroke="#e53935" stroke-width="2.5"/>
@@ -1051,23 +1063,30 @@ function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning
     <text x="${otherCX}" y="${otherCY + (otherLabel.length > 1 ? 3.5 : 4.5)}" text-anchor="middle" font-size="${otherFontSize}" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${otherLabel}</text>` : '';
 
   const orderCX = pinCX;
-  const orderCY = pinTipY - 4;
+  const orderCY = pinTipY + 2;
   const orderSVG = orderNum ? `
     <circle cx="${orderCX}" cy="${orderCY}" r="10" fill="#1565c0" stroke="#fff" stroke-width="2"/>
     <text x="${orderCX}" y="${orderCY + 4}" text-anchor="middle" font-size="11" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${orderNum}</text>` : '';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">
     <defs>
-      <filter id="${uid}sh" x="-25%" y="-15%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="2" stdDeviation="2.2" flood-color="#000" flood-opacity="0.32"/>
+      <filter id="${uid}sh" x="-30%" y="-20%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity="0.35"/>
       </filter>
-      <linearGradient id="${uid}g" x1="0" y1="0" x2="0" y2="1">
+      <linearGradient id="${uid}g" x1="15%" y1="0%" x2="85%" y2="100%">
         <stop offset="0%" stop-color="${pinFillTop}"/>
+        <stop offset="45%" stop-color="${pinFillMid}"/>
         <stop offset="100%" stop-color="${pinFill}"/>
+      </linearGradient>
+      <linearGradient id="${uid}shine" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#fff" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <g filter="url(#${uid}sh)">
-      <path d="${pinPath}" fill="url(#${uid}g)" stroke="${strokeColor}" stroke-width="${STROKE}" stroke-linejoin="round"/>
+      <path d="${pinPath}" fill="url(#${uid}g)" stroke="${strokeColor}" stroke-width="${STROKE}" stroke-linejoin="miter"/>
+      ${facetInner}
+      <path d="M${pinCX - half * 0.35} ${pinTop + 4} L${pinCX - half * 0.05} ${pinTop + crystalH * 0.18} L${pinCX - half * 0.25} ${midY - 4} Z" fill="url(#${uid}shine)"/>
       ${pinInner}
     </g>
     ${nameSVG}
@@ -1358,7 +1377,6 @@ function handleMapDrop(e) {
   }
   if (nearest && minDist < 500) {
     assignStaff(nearest.prop, dragStaff);
-    closeSidebar();
   } else {
     showToast('物件の近くにドロップしてください');
   }
@@ -1503,9 +1521,12 @@ function renderStaffChips() {
 
 function syncTopbarHeight() {
   const topbar = document.getElementById('topbar');
-  if (topbar) {
-    document.documentElement.style.setProperty('--topbar-h', topbar.offsetHeight + 'px');
+  const navBar = document.getElementById('nav-bar');
+  let h = topbar ? topbar.offsetHeight : 86;
+  if (navBar && navBar.classList.contains('visible')) {
+    h += navBar.offsetHeight;
   }
+  document.documentElement.style.setProperty('--topbar-h', h + 'px');
 }
 
 function applyStaffFilter(staffId, options = {}) {
@@ -1542,7 +1563,7 @@ function applyStaffFilter(staffId, options = {}) {
 
   renderStaffChips();
 
-  if (currentMode === 'list') {
+  if (currentMode === 'nav') {
     const sel = document.getElementById('list-staff-select');
     if (sel && sel.value !== staffId) sel.value = staffId || '';
   }
@@ -1611,19 +1632,11 @@ function setMode(mode) {
   currentMode = mode;
   document.getElementById('btn-normal').classList.toggle('active', mode === 'normal');
   document.getElementById('btn-nav').classList.toggle('active', mode === 'nav');
-  document.getElementById('btn-list').classList.toggle('active', mode === 'list');
-  document.getElementById('nav-bar').classList.toggle('visible', mode === 'nav');
-  document.getElementById('list-panel').classList.toggle('visible', mode === 'list');
-  if (mode === 'list' || mode === 'nav') closeSidebar();
-  if (mode === 'normal') {
-    clearNavSelection();
-    if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
-    // 訪問順バッジをクリア
-    markers.forEach(entry => {
-      if (entry._orderNum) { entry._orderNum = null; updateMarkerColor(entry.prop); }
-    });
-  }
-  if (mode === 'list') {
+  const isNav = mode === 'nav';
+  document.getElementById('nav-bar').classList.toggle('visible', isNav);
+  document.getElementById('list-panel').classList.toggle('visible', isNav);
+  if (isNav) {
+    if (window.innerWidth <= 640) closeSidebar();
     updateListStaffSelect();
     const sel = document.getElementById('list-staff-select');
     if (activeStaffFilter) {
@@ -1633,8 +1646,15 @@ function setMode(mode) {
       sel.value = staffList[0].id;
       renderListPanel(staffList[0].id);
     }
-    syncTopbarHeight();
   }
+  if (mode === 'normal') {
+    clearNavSelection();
+    if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+    markers.forEach(entry => {
+      if (entry._orderNum) { entry._orderNum = null; updateMarkerColor(entry.prop); }
+    });
+  }
+  syncTopbarHeight();
 }
 
 function handleNavSelect(prop, marker, location) {
@@ -1689,7 +1709,7 @@ function updateNavBar() {
   const btnGmaps = document.getElementById('btn-nav-gmaps');
   const summary = document.getElementById('nav-summary');
   if (navSelection.length === 0) {
-    list.innerHTML = '<span style="font-size:12px;opacity:0.7;">物件をタップして選択、または経由地を入力（最大10件）</span>';
+    list.innerHTML = '<span style="font-size:12px;opacity:0.7;">右リストの順序を「リスト順→ルート」、または地図タップで選択（最大10件）</span>';
     summary.textContent = '';
   } else {
     list.innerHTML = navSelection.map((n, i) => `
@@ -2180,11 +2200,11 @@ function closeSidebar() {
   document.getElementById('sidebar-overlay').classList.remove('visible');
 }
 
-// 担当者選択後にドロワーを閉じる
+// 担当者選択後にSPではドロワーを閉じる
 function selectStaffAndClose(staff) {
   selectedStaff = staff;
   showCurrentBadge(staff);
-  closeSidebar();
+  if (window.innerWidth <= 640) closeSidebar();
 }
 
 let toastTimer = null;
@@ -2205,6 +2225,50 @@ function updateListStaffSelect() {
   if (prev && staffList.some(s => s.id === prev)) sel.value = prev;
 }
 
+function getStaffProps(staffId) {
+  const staff = staffList.find(s => s.id === staffId);
+  if (!staff) return [];
+  let props = markers
+    .map(m => m.prop)
+    .filter(p => {
+      const sheetText = (p.photographer || '').trim();
+      const pid = propId(p);
+      const assign = assignments[pid];
+      if (sheetText) {
+        return sheetText.startsWith(staff.name) || sheetText.includes(staff.name);
+      }
+      return !!(assign && assign.staffName === staff.name);
+    });
+  const order = visitOrder[staffId] || [];
+  props.sort((a, b) => {
+    const ia = order.indexOf(propId(a));
+    const ib = order.indexOf(propId(b));
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  return props;
+}
+
+function loadVisitOrderToNav() {
+  const staffId = document.getElementById('list-staff-select')?.value;
+  if (!staffId) { showToast('担当者を選択してください'); return; }
+  const props = getStaffProps(staffId).filter(p => !completions[propId(p)]);
+  if (props.length === 0) { showToast('ルートに追加する物件がありません'); return; }
+  navSelection = props.slice(0, NAV_MAX).map(prop => {
+    const entry = markers.find(m => m.prop === prop);
+    return { type: 'prop', prop, marker: entry?.marker, location: entry?.location, label: prop.name };
+  });
+  if (props.length > NAV_MAX) {
+    showToast(`先頭${NAV_MAX}件をルートにセットしました（未完了のみ）`);
+  } else {
+    showToast(`${navSelection.length}件をルートにセットしました`);
+  }
+  updateNavBar();
+  updateNavMarkerLabels();
+}
+
 function renderListPanel(staffId) {
   const body = document.getElementById('list-panel-body');
   if (!body) return;
@@ -2217,35 +2281,12 @@ function renderListPanel(staffId) {
   const staff = staffList.find(s => s.id === staffId);
   if (!staff) return;
 
-  // この担当者の物件を取得（スプシのphotographer欄を優先、空の場合のみ手動割り当てを参照）
-  let props = markers
-    .map(m => m.prop)
-    .filter(p => {
-      const sheetText = (p.photographer || '').trim();
-      const pid = propId(p);
-      const assign = assignments[pid];
-      if (sheetText) {
-        return sheetText.startsWith(staff.name) || sheetText.includes(staff.name);
-      } else {
-        return !!(assign && assign.staffName === staff.name);
-      }
-    });
+  const props = getStaffProps(staffId);
 
   if (props.length === 0) {
     body.innerHTML = `<div class="list-empty">${staff.name} さんの担当物件はありません</div>`;
     return;
   }
-
-  // 訪問順に並び替え
-  const order = visitOrder[staffId] || [];
-  props.sort((a, b) => {
-    const ia = order.indexOf(propId(a));
-    const ib = order.indexOf(propId(b));
-    if (ia === -1 && ib === -1) return 0;
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
 
   const doneCount = props.filter(p => completions[propId(p)]).length;
   const total = props.length;
@@ -2281,7 +2322,7 @@ function renderListPanel(staffId) {
       ${assign?.date ? `<div class="list-card-info"><span class="label">📅</span><span>${assign.date}</span></div>` : ''}
       <div class="list-card-actions">
         <button class="btn-card-loc" onclick="focusMarker('${pid}')">📍 位置</button>
-        <button class="btn-card-nav" onclick="navToFromList('${prop.address}')">🧭 ナビ</button>
+        <button class="btn-card-nav" onclick="navToFromList('${prop.address}')">📱 Gマップ</button>
         <button class="btn-card-done${isDone ? ' done-active' : ''}" onclick="toggleCompletion('${pid}', '${staffId}')">
           ${isDone ? '✅' : '○ 完了'}
         </button>
@@ -2440,28 +2481,7 @@ function handleTouchEnd(e) {
 // 訪問順番号をマーカーに反映
 function updateMarkersOrder(staffId) {
   if (!staffId) return;
-  const staff = staffList.find(s => s.id === staffId);
-  if (!staff) return;
-
-  // この担当者の物件を訪問順で取得
-  const order = visitOrder[staffId] || [];
-  let props = markers
-    .map(m => m.prop)
-    .filter(p => {
-      const sheetText = (p.photographer || '').trim();
-      const pid = propId(p);
-      const assign = assignments[pid];
-      return sheetText ? (sheetText.startsWith(staff.name) || sheetText.includes(staff.name))
-                       : !!(assign && assign.staffName === staff.name);
-    });
-  props.sort((a, b) => {
-    const ia = order.indexOf(propId(a));
-    const ib = order.indexOf(propId(b));
-    if (ia === -1 && ib === -1) return 0;
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
+  const props = getStaffProps(staffId);
 
   // まず全マーカーの順番バッジをクリア
   markers.forEach(entry => {
@@ -2663,7 +2683,7 @@ function setStartPlace(id) {
   showToast(`🚩 出発地を「${place.name}」に設定しました`);
   // ナビモードに切り替え
   setMode('nav');
-  closeSidebar();
+  if (window.innerWidth <= 640) closeSidebar();
 }
 
 // ナビバーのドロップダウンから選択
