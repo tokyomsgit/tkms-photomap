@@ -298,6 +298,8 @@
     background: rgba(66,133,244,0.08); pointer-events: none;
   }
   #drop-overlay.visible { display: block; }
+  body.staff-dragging #drop-overlay.visible { pointer-events: auto; cursor: copy; }
+  body.staff-dragging #sidebar-overlay { pointer-events: none; }
 
   /* ===== 情報ウィンドウカスタム ===== */
   .iw-wrap { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; min-width: 240px; max-width: 320px; }
@@ -609,6 +611,7 @@ const CONFIG = {
 const COL = {
   OTHER_COMPANY:  2,  // C: 他社
   PHOTOGRAPHER:   3,  // D: 撮影者
+  DATE:           4,  // E: 日付
   PERIOD:        16,  // Q: 時期
   STATUS:        17,  // R: 状況
   KEY_TYPE:      18,  // S: 鍵対応
@@ -736,10 +739,10 @@ async function initMap() {
   directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: false });
   directionsRenderer.setMap(map);
 
-  // ドロップ受け付け
-  map.getDiv().addEventListener('dragover', e => { e.preventDefault(); showDropOverlay(true); });
-  map.getDiv().addEventListener('dragleave', () => showDropOverlay(false));
-  map.getDiv().addEventListener('drop', e => { e.preventDefault(); showDropOverlay(false); handleMapDrop(e); });
+  // ドロップ受け付け（地図div + オーバーレイ + メインエリア）
+  setupMapDropZone(map.getDiv());
+  setupMapDropZone(document.getElementById('drop-overlay'));
+  setupMapDropZone(document.getElementById('main'));
 
   // まずlocalStorageから読み込み（高速表示）
   loadStaffFromStorage();
@@ -834,7 +837,7 @@ async function geocodeAndPlaceMarkers() {
   Object.keys(completions).forEach(pid => updateMarkerCompletion(pid));
 
   // フィルタ中なら表示状態を再適用
-  if (activeStaffFilter) applyStaffFilter(activeStaffFilter);
+  if (activeStaffFilter) applyStaffFilter(activeStaffFilter, { silent: true });
 }
 
 function geocodeAddress(geocoder, address) {
@@ -1243,7 +1246,7 @@ function assignStaff(prop, staff, dateStr) {
   writeToSheet(prop, staff, staff.name, date);
 
   // フィルタ中なら表示状態を再適用
-  if (activeStaffFilter) applyStaffFilter(activeStaffFilter);
+  if (activeStaffFilter) applyStaffFilter(activeStaffFilter, { silent: true });
 }
 
 function unassignStaff(pid) {
@@ -1253,19 +1256,21 @@ function unassignStaff(pid) {
   const entry = markers.find(m => propId(m.prop) === pid);
   if (entry) {
     updateMarkerColor(entry.prop);
+    writeToSheet(entry.prop, null, '', '');
     if (entry.infoWindow) { entry.infoWindow.close(); entry.infoWindow = null; }
   }
   showToast('割り当てを解除しました');
 
   // フィルタ中なら表示状態を再適用
-  if (activeStaffFilter) applyStaffFilter(activeStaffFilter);
+  if (activeStaffFilter) applyStaffFilter(activeStaffFilter, { silent: true });
 }
 
 function updateMarkerColor(prop) {
   const pid = propId(prop);
   const assign = assignments[pid];
-  const color = assign ? assign.staffColor : '#e74c3c';
-  const borderColor = assign ? assign.staffColor : '#c0392b';
+  const base = getKeyTypeColor(prop.key_type);
+  const fillColor = base.fill;
+  const borderColor = assign ? assign.staffColor : base.border;
   const entry = markers.find(m => m.prop === prop);
   if (!entry) return;
   const isKarikari = prop.key_type === '鍵借';
@@ -1273,7 +1278,7 @@ function updateMarkerColor(prop) {
   const staffName2 = assign ? assign.staffName : '';
   const otherCount2 = prop.other_company || '';
   const orderNum = entry._orderNum || null;
-  entry.marker.setIcon(buildMarkerIcon(color, borderColor, prop.is_kouji, isKarikari, keyWarning, staffName2, otherCount2, orderNum));
+  entry.marker.setIcon(buildMarkerIcon(fillColor, borderColor, prop.is_kouji, isKarikari, keyWarning, staffName2, otherCount2, orderNum));
   entry.marker.setZIndex(assign ? 10 : 5);
 }
 
@@ -1281,38 +1286,69 @@ function updateMarkerColor(prop) {
 // ドラッグ & ドロップ
 // =============================================
 let dragStaff = null;
+let staffDragDidDrop = false;
+let ignoreStaffClick = false;
+
+function setupMapDropZone(el) {
+  if (!el) return;
+  el.addEventListener('dragover', e => {
+    if (!dragStaff) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    showDropOverlay(true);
+  });
+  el.addEventListener('drop', e => {
+    if (!dragStaff) return;
+    e.preventDefault();
+    staffDragDidDrop = true;
+    showDropOverlay(false);
+    handleMapDrop(e);
+  });
+}
+
+function clientToLatLng(clientX, clientY) {
+  const rect = map.getDiv().getBoundingClientRect();
+  const bounds = map.getBounds();
+  if (!bounds) return null;
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  const lat = ne.lat() - (ne.lat() - sw.lat()) * (y / rect.height);
+  const lng = sw.lng() + (ne.lng() - sw.lng()) * (x / rect.width);
+  return new google.maps.LatLng(lat, lng);
+}
 
 function onStaffDragStart(e, staff) {
   dragStaff = staff;
   selectedStaff = staff;
+  staffDragDidDrop = false;
+  ignoreStaffClick = false;
+  document.body.classList.add('staff-dragging');
   e.dataTransfer.effectAllowed = 'copy';
   e.dataTransfer.setData('text/plain', staff.id);
   document.querySelectorAll('.staff-item').forEach(el => el.classList.remove('selected-drag'));
-  e.target.classList.add('dragging');
+  e.currentTarget.classList.add('dragging');
   showCurrentBadge(staff);
   showDropOverlay(true);
 }
 
 function onStaffDragEnd(e) {
-  e.target.classList.remove('dragging');
+  e.currentTarget.classList.remove('dragging');
+  document.body.classList.remove('staff-dragging');
   showDropOverlay(false);
+  if (!staffDragDidDrop) dragStaff = null;
+  ignoreStaffClick = true;
 }
 
 function handleMapDrop(e) {
   if (!dragStaff) return;
-  const rect = map.getDiv().getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-
-  // ピクセル→LatLng変換
-  const projection = map.getProjection();
-  if (!projection) return;
-  const bounds = map.getBounds();
-  const ne = bounds.getNorthEast();
-  const sw = bounds.getSouthWest();
-  const lng = sw.lng() + (ne.lng() - sw.lng()) * (x / rect.width);
-  const lat = ne.lat() - (ne.lat() - sw.lat()) * (y / rect.height);
-  const dropLatLng = new google.maps.LatLng(lat, lng);
+  const dropLatLng = clientToLatLng(e.clientX, e.clientY);
+  if (!dropLatLng) {
+    showToast('地図の読み込み中です。少し待ってから再度お試しください');
+    dragStaff = null;
+    return;
+  }
 
   // 最も近い物件を探す
   let nearest = null, minDist = Infinity;
@@ -1322,11 +1358,11 @@ function handleMapDrop(e) {
   }
   if (nearest && minDist < 500) {
     assignStaff(nearest.prop, dragStaff);
+    closeSidebar();
   } else {
     showToast('物件の近くにドロップしてください');
   }
   dragStaff = null;
-  showDropOverlay(false);
 }
 
 function showDropOverlay(show) {
@@ -1412,6 +1448,7 @@ function renderStaffList() {
     div.addEventListener('dragstart', e => onStaffDragStart(e, staff));
     div.addEventListener('dragend', onStaffDragEnd);
     div.addEventListener('click', () => {
+      if (ignoreStaffClick) { ignoreStaffClick = false; return; }
       if (selectedStaff && selectedStaff.id === staff.id) {
         clearSelectedStaff();
       } else {
@@ -1817,50 +1854,86 @@ function applySheetPhotographers(props) {
 // =============================================
 // スプレッドシート書き込み
 // =============================================
-async function writeToSheet(prop, staff, nameStr, dateStr) {
-  if (!prop.sheet_row) return;
+async function writeToSheetViaApi(row, photographer, date) {
+  if (!CONFIG.SHEETS_API_KEY) return false;
 
-  // ① GAS WebApp経由
+  const colD = colIndexToLetter(COL.PHOTOGRAPHER);
+  const colE = colIndexToLetter(COL.DATE);
+  const range = `${CONFIG.SHEET_NAME}!${colD}${row}:${colE}${row}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW&key=${CONFIG.SHEETS_API_KEY}`;
+
+  try {
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [[photographer, date]] }),
+    });
+    if (res.ok) return true;
+    console.warn('スプシAPI書き込み失敗:', res.status, await res.text());
+  } catch (e) {
+    console.error('スプシAPI書き込み例外:', e);
+  }
+  return false;
+}
+
+async function writeToSheet(prop, staff, nameStr, dateStr) {
+  if (!prop.sheet_row) return false;
+
+  const row = prop.sheet_row + 1;
+  const photographer = nameStr ?? '';
+  const date = dateStr ?? '';
+  const label = photographer
+    ? `${prop.name} → ${photographer}${date ? ' ' + date : ''}`
+    : `${prop.name} の割り当てをクリア`;
+
+  // ① GAS WebApp（CORS応答があれば結果を確認）
   if (CONFIG.GAS_URL) {
+    const payload = {
+      spreadsheetId: CONFIG.SPREADSHEET_ID,
+      sheetName: CONFIG.SHEET_NAME,
+      row,
+      photographerValue: photographer,
+      dateValue: date,
+    };
+
     try {
-      // GASはCORSヘッダーを返さないためno-corsで送信（レスポンスは読めないがリクエストは届く）
+      const res = await fetch(CONFIG.GAS_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        showToast(`📝 スプシ更新: ${label}`);
+        return true;
+      }
+      console.warn('GAS書き込み失敗:', res.status, await res.text());
+    } catch (e) {
+      console.warn('GAS cors書き込み不可:', e);
+    }
+
+    try {
       await fetch(CONFIG.GAS_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          spreadsheetId: CONFIG.SPREADSHEET_ID,
-          sheetName: CONFIG.SHEET_NAME,
-          row: prop.sheet_row + 1,
-          photographerValue: nameStr,
-          dateValue: dateStr || '',
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-      // no-corsではレスポンスが読めないが、エラーなければ届いているとみなす
-      showToast(`📝 スプシ送信: ${prop.name} → ${nameStr}${dateStr ? ' ' + dateStr : ''}`);
-      return;
-    } catch(e) {
-      console.warn('GAS書き込みエラー:', e);
+      showToast('📝 スプシ送信を試みました（反映をスプシで確認してください）');
+      return false;
+    } catch (e) {
+      console.warn('GAS no-cors送信失敗:', e);
     }
   }
 
-  // ② Sheets API v4（フォールバック）
-  if (CONFIG.SHEETS_API_KEY) {
-    const row = prop.sheet_row + 1;
-    const colLetter = colIndexToLetter(COL.PHOTOGRAPHER);
-    const range = `${CONFIG.SHEET_NAME}!${colLetter}${row}`;
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW&key=${CONFIG.SHEETS_API_KEY}`;
-    try {
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [[nameStr]] }),
-      });
-      if (res.ok) {
-        showToast(`📝 スプシ更新: ${prop.name} → ${nameStr}`);
-      }
-    } catch(e) { console.error('スプシ書き込みエラー:', e); }
+  // ② Sheets API v4（GAS未設定 or GAS失敗時）
+  const ok = await writeToSheetViaApi(row, photographer, date);
+  if (ok) {
+    showToast(`📝 スプシ更新: ${label}`);
+  } else {
+    showToast('⚠️ スプシ書き込み失敗');
   }
+  return ok;
 }
 
 // 列番号(0-indexed) → アルファベット変換 (0→A, 25→Z, 26→AA...)
