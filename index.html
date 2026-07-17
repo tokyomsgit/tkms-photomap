@@ -1,0 +1,2529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>撮影MAP</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; display: flex; height: 100dvh; overflow: hidden; background: #f0f2f5; }
+
+  /* ===== サイドバー（PC: 左固定 / SP: 下ドロワー） ===== */
+  #sidebar {
+    width: 240px; min-width: 240px; background: #fff; display: flex; flex-direction: column;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.12); z-index: 100; overflow-y: auto;
+    transition: transform 0.3s ease;
+  }
+  #sidebar-header {
+    padding: 14px 12px 10px; border-bottom: 1px solid #e8e8e8; background: #fff;
+    position: sticky; top: 0; z-index: 10;
+  }
+  #sidebar-header h2 { font-size: 13px; color: #666; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  #sidebar-header h2::before { content: '👤'; }
+
+  /* 担当者追加フォーム */
+  .add-staff-form { display: flex; gap: 4px; margin-bottom: 6px; }
+  .add-staff-form input[type=text] {
+    flex: 1; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; outline: none;
+  }
+  .add-staff-form input[type=text]:focus { border-color: #4285f4; }
+  .btn-add {
+    padding: 6px 10px; background: #4285f4; color: #fff; border: none; border-radius: 6px;
+    font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  .btn-add:hover { background: #3367d6; }
+
+  /* 担当者リスト */
+  #staff-list { padding: 6px 12px 12px; }
+  .staff-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px; margin-bottom: 4px;
+    border-radius: 8px; cursor: grab; border: 2px solid transparent; transition: all 0.15s;
+    background: #f8f9fa; user-select: none;
+  }
+  .staff-item:active { cursor: grabbing; opacity: 0.7; }
+  .staff-item.dragging { opacity: 0.4; }
+  .staff-item:hover { background: #f0f0f0; }
+  .staff-item.selected { border-color: var(--staff-color, #4285f4); background: #e8f0fe; }
+  .staff-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .staff-name { font-size: 13px; font-weight: 500; flex: 1; }
+  .staff-item .btn-del {
+    background: none; border: none; color: #bbb; cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1;
+  }
+  .staff-item .btn-del:hover { color: #e74c3c; }
+  .staff-dot {
+    width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    cursor: pointer; border: 2px solid rgba(0,0,0,0.15); transition: transform 0.15s; position: relative;
+  }
+  .staff-dot:hover { transform: scale(1.3); }
+  .staff-color-input {
+    position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
+  }
+  .staff-item.selected-drag {
+    border-color: currentColor;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  /* 日付パネル */
+
+
+  /* ドラッグヒント */
+  #drag-hint {
+    margin: 8px 12px; padding: 8px 10px; background: #fff3cd; border-radius: 8px;
+    font-size: 11px; color: #856404; border: 1px solid #ffc107;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* 現在選択中の担当者バッジ */
+  #current-staff-badge {
+    margin: 8px 12px; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700;
+    color: #fff; text-align: center; display: none; cursor: pointer;
+  }
+  #current-staff-badge:hover { opacity: 0.9; }
+
+  /* ===== メインエリア ===== */
+  #main { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+  /* トップバー */
+  #topbar {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: #fff; border-bottom: 1px solid #e0e0e0; z-index: 50; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    flex-wrap: nowrap;
+  }
+  #topbar h1 { font-size: 15px; font-weight: 700; color: #202124; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #topbar h1 span.cam { font-size: 16px; }
+  .badge-count { background: #4285f4; color: #fff; font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+  .badge-update { font-size: 10px; color: #888; white-space: nowrap; }
+  .topbar-spacer { flex: 1; }
+
+  /* モードボタン */
+  .mode-btn {
+    padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    font-size: 12px; cursor: pointer; transition: all 0.15s; color: #555; white-space: nowrap;
+  }
+  .mode-btn:hover { background: #f0f0f0; }
+  .mode-btn.active { background: #4285f4; color: #fff; border-color: #4285f4; }
+
+  .btn-refresh {
+    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px; color: #555; white-space: nowrap;
+  }
+  .btn-refresh:hover { background: #f5f5f5; }
+
+  /* ===== 担当者ビューパネル ===== */
+  #list-panel {
+    display: none; position: absolute; top: 0; right: 0; bottom: 0;
+    width: 320px; background: #fff; z-index: 80;
+    box-shadow: -2px 0 12px rgba(0,0,0,0.15);
+    flex-direction: column; overflow: hidden;
+  }
+  #list-panel.visible { display: flex; }
+  #list-panel-header {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+    background: #fff; border-bottom: 1px solid #eee; flex-shrink: 0;
+  }
+  #list-panel-title { font-size: 13px; font-weight: 700; color: #333; white-space: nowrap; }
+  #list-staff-select {
+    flex: 1; padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 12px; outline: none;
+  }
+  #btn-list-close {
+    background: none; border: none; font-size: 16px; color: #999; cursor: pointer; padding: 2px 6px;
+  }
+  #btn-list-close:hover { color: #333; }
+  #list-panel-body { flex: 1; overflow-y: auto; padding: 8px; }
+
+  /* 物件カード */
+  .list-card {
+    border: 1px solid #e8e8e8; border-radius: 10px; padding: 10px 12px;
+    margin-bottom: 8px; background: #fff; transition: all 0.2s;
+    cursor: pointer;
+  }
+  .list-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .list-card.done { background: #f5f5f5; opacity: 0.6; }
+  .list-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .list-card-order {
+    width: 22px; height: 22px; border-radius: 50%; background: #4285f4; color: #fff;
+    font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .list-card.done .list-card-order { background: #bbb; }
+  .list-card-name { font-size: 13px; font-weight: 700; flex: 1; color: #202124; }
+  .list-card.done .list-card-name { text-decoration: line-through; color: #999; }
+  .list-card-room { font-size: 11px; color: #888; }
+  .list-card-info { font-size: 11px; color: #666; margin-bottom: 3px; display: flex; align-items: flex-start; gap: 4px; }
+  .list-card-info span.label { color: #aaa; min-width: 28px; }
+  .list-card-key {
+    background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px;
+    padding: 4px 8px; font-size: 11px; color: #6d4c00; margin-bottom: 6px;
+  }
+  .btn-card-loc {
+    padding: 7px 10px; background: #f1f3f4; color: #555; border: 1px solid #ddd;
+    border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;
+  }
+  .btn-card-loc:hover { background: #e8f0fe; color: #1a73e8; border-color: #4285f4; }
+  .list-drag-handle {
+    font-size: 16px; color: #ccc; cursor: grab; padding: 0 4px;
+    flex-shrink: 0; user-select: none; touch-action: none;
+  }
+  .list-drag-handle:hover { color: #888; }
+  .list-card.drag-over { border-color: #4285f4; background: #e8f0fe; }
+  .btn-card-nav {
+    flex: 1; padding: 7px; background: #1a73e8; color: #fff; border: none;
+    border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .btn-card-nav:hover { background: #1557b0; }
+  .btn-card-done {
+    flex: 1; padding: 7px; background: #e8f5e9; color: #2e7d32; border: 1px solid #a5d6a7;
+    border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .btn-card-done:hover { background: #c8e6c9; }
+  .btn-card-done.done-active {
+    background: #43a047; color: #fff; border-color: #43a047;
+  }
+  .list-empty { text-align: center; color: #aaa; font-size: 13px; padding: 40px 20px; }
+
+  /* 完了ピン（グレーアウト） */
+  .marker-done { opacity: 0.35 !important; filter: grayscale(100%); }
+
+  /* SP対応 */
+  @media (max-width: 640px) {
+    #list-panel {
+      top: auto; right: 0; left: 0; bottom: 0;
+      width: 100%; height: 60dvh;
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.18);
+    }
+  }
+
+  /* 担当者フィルタ */
+  #staff-filter {
+    padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff;
+    font-size: 12px; color: #555; cursor: pointer; max-width: 130px;
+  }
+  #staff-filter:focus { outline: none; border-color: #4285f4; }
+
+  /* ハンバーガーボタン（SP用） */
+  #btn-menu {
+    display: none; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px;
+    background: #fff; font-size: 18px; cursor: pointer; line-height: 1; color: #555;
+  }
+
+  /* 地図 */
+  #map { flex: 1; width: 100%; }
+
+  /* ===== ナビモードバー ===== */
+  #nav-bar {
+    display: none; background: #1a73e8; color: #fff; padding: 10px 16px;
+    font-size: 13px; align-items: center; gap: 12px;
+  }
+  #nav-bar.visible { display: flex; }
+  #nav-selected { flex: 1; }
+  .btn-nav-go {
+    padding: 6px 16px; background: #fff; color: #1a73e8; border: none; border-radius: 6px;
+    font-weight: 700; cursor: pointer; font-size: 13px;
+  }
+  .btn-nav-go:disabled { opacity: 0.5; cursor: default; }
+  .btn-nav-clear {
+    padding: 6px 12px; background: rgba(255,255,255,0.2); color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+
+  /* ナビバー拡張 */
+  #nav-bar { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+  #nav-top-row { display: flex; align-items: center; gap: 8px; width: 100%; flex-wrap: wrap; }
+  #nav-start-wrap { display: flex; align-items: center; gap: 6px; }
+  #nav-start-wrap label { font-size: 11px; white-space: nowrap; opacity: 0.85; }
+  #nav-start-input {
+    padding: 5px 8px; border: none; border-radius: 6px; font-size: 12px;
+    width: 200px; outline: none; color: #333;
+  }
+  #nav-custom-stop-wrap { display: flex; align-items: center; gap: 6px; }
+  #nav-custom-stop-input {
+    padding: 5px 8px; border: none; border-radius: 6px; font-size: 12px;
+    width: 180px; outline: none; color: #333;
+  }
+  .btn-nav-add-stop {
+    padding: 5px 10px; background: rgba(255,255,255,0.25); color: #fff; border: none;
+    border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .btn-nav-add-stop:hover { background: rgba(255,255,255,0.4); }
+  #nav-road-toggle {
+    display: flex; align-items: center; gap: 4px; font-size: 11px; cursor: pointer;
+    background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 6px;
+    white-space: nowrap;
+  }
+  #nav-road-toggle input { cursor: pointer; }
+  #nav-waypoint-list { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; width: 100%; }
+
+  /* ===== ドロップゾーンオーバーレイ ===== */
+  #drop-overlay {
+    display: none; position: absolute; inset: 0; z-index: 200;
+    background: rgba(66,133,244,0.08); pointer-events: none;
+  }
+  #drop-overlay.visible { display: block; }
+
+  /* ===== 情報ウィンドウカスタム ===== */
+  .iw-wrap { font-family: 'Hiragino Sans', 'Meiryo', sans-serif; min-width: 240px; max-width: 320px; }
+  .iw-name { font-size: 14px; font-weight: 700; color: #202124; margin-bottom: 4px; }
+  .iw-room { font-size: 11px; color: #888; margin-bottom: 8px; }
+  .iw-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 4px; font-size: 12px; color: #555; }
+  .iw-label { font-size: 10px; color: #aaa; min-width: 40px; flex-shrink: 0; }
+  .iw-val { flex: 1; word-break: break-all; }
+  .iw-divider { border: none; border-top: 1px solid #eee; margin: 8px 0; }
+  .iw-key-box { background: #fff8e1; border: 1px solid #ffd54f; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; font-size: 11px; color: #6d4c00; }
+  .iw-key-box strong { display: block; margin-bottom: 2px; color: #e65100; }
+  .iw-assign-wrap { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .iw-assign-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .iw-assign-name { font-size: 12px; font-weight: 600; }
+  .iw-assign-date { font-size: 11px; color: #888; }
+  .iw-btn-unassign { margin-left: auto; font-size: 10px; color: #e74c3c; background: none; border: none; cursor: pointer; padding: 2px 4px; }
+  .iw-link { font-size: 11px; color: #4285f4; text-decoration: none; }
+  .iw-link:hover { text-decoration: underline; }
+  .iw-nav-btn {
+    margin-top: 8px; width: 100%; padding: 7px; background: #1a73e8; color: #fff;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+
+  /* ===== よく使う場所 ===== */
+  #places-panel {
+    padding: 10px 12px 14px; border-top: 1px solid #eee;
+  }
+  #places-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  #places-header span { font-size: 13px; font-weight: 600; color: #666; }
+  #btn-add-place {
+    padding: 3px 10px; background: #4285f4; color: #fff; border: none;
+    border-radius: 5px; font-size: 11px; cursor: pointer;
+  }
+  #btn-add-place:hover { background: #3367d6; }
+  .place-item {
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+    background: #f8f9fa; border-radius: 7px; margin-bottom: 5px;
+    font-size: 12px;
+  }
+  .place-item-icon { font-size: 14px; flex-shrink: 0; }
+  .place-item-info { flex: 1; min-width: 0; }
+  .place-item-name { font-weight: 600; color: #333; }
+  .place-item-addr { font-size: 10px; color: #999; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn-place-nav {
+    padding: 3px 7px; background: #1a73e8; color: #fff; border: none;
+    border-radius: 5px; font-size: 10px; cursor: pointer; white-space: nowrap;
+  }
+  .btn-place-nav:hover { background: #1557b0; }
+  .btn-place-edit {
+    background: none; border: none; color: #bbb; cursor: pointer; font-size: 13px; padding: 0 2px;
+  }
+  .btn-place-edit:hover { color: #555; }
+  .btn-place-del {
+    background: none; border: none; color: #bbb; cursor: pointer; font-size: 13px; padding: 0 2px;
+  }
+  .btn-place-del:hover { color: #e74c3c; }
+  #add-place-form input {
+    width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 12px; margin-bottom: 5px; outline: none; box-sizing: border-box;
+  }
+  #add-place-form input:focus { border-color: #4285f4; }
+  .btn-place-save {
+    flex: 1; padding: 6px; background: #4285f4; color: #fff; border: none;
+    border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .btn-place-cancel {
+    flex: 1; padding: 6px; background: #f1f3f4; color: #555; border: none;
+    border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  #nav-start-places {
+    padding: 4px 6px; border: 1px solid #rgba(255,255,255,0.3); border-radius: 5px;
+    background: rgba(255,255,255,0.2); color: #fff; font-size: 11px; cursor: pointer;
+  }
+  #nav-start-places option { color: #333; background: #fff; }
+
+  /* ===== オーバーレイ背景（SP ドロワー用） ===== */
+  #sidebar-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 149;
+  }
+  #sidebar-overlay.visible { display: block; }
+
+  /* ===== スマホ用ドロワー ===== */
+  /* SP: 下からスライドするドロワー */
+  #sp-staff-bar {
+    display: none;
+  }
+
+  /* ===== レスポンシブ ===== */
+  @media (max-width: 640px) {
+    /* bodyをPC横並び→SP縦積みに */
+    body { flex-direction: column; }
+
+    /* サイドバーをボトムドロワーに */
+    #sidebar {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      width: 100%; min-width: unset;
+      max-height: 70dvh;
+      border-radius: 16px 16px 0 0;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.18);
+      transform: translateY(100%);
+      z-index: 150;
+      overflow-y: auto;
+    }
+    #sidebar.open { transform: translateY(0); }
+
+    /* ドロワーのつまみ */
+    #sidebar-header::before {
+      content: '';
+      display: block;
+      width: 36px; height: 4px;
+      background: #ddd; border-radius: 2px;
+      margin: 0 auto 10px;
+    }
+
+    /* メインを全画面に */
+    #main { flex: 1; height: 100dvh; }
+
+    /* トップバーをコンパクトに */
+    #topbar { padding: 8px 8px; gap: 4px; }
+    #topbar h1 { font-size: 13px; }
+    #topbar h1 .cam { display: none; }
+    .badge-update { display: none; }
+    #btn-menu { display: block; }
+    #staff-filter { max-width: 84px; font-size: 11px; padding: 6px 4px; }
+
+    /* ドラッグヒントをSPでは非表示（タップで選択なので） */
+    #drag-hint { display: none; }
+
+    /* 担当者バッジをSPでは画面下部に固定表示 */
+    #current-staff-badge {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      margin: 0; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      padding: 12px 24px; font-size: 15px; white-space: nowrap;
+    }
+
+    /* ナビバーをSP対応 */
+    #nav-start-input { width: 100%; }
+    #nav-custom-stop-input { width: 120px; }
+    #nav-start-wrap { width: 100%; }
+
+    /* 担当者アイテムをタップしやすく */
+    .staff-item { padding: 10px 12px; }
+    .staff-name { font-size: 14px; }
+
+    /* 情報ウィンドウをSP幅に */
+    .iw-wrap { min-width: 200px; max-width: 90vw; }
+  }
+
+  /* ===== 工事中アニメーション ===== */
+
+
+  /* 鍵対応カラー凡例（参考） */
+  /* 現地=緑 / 鍵借=黄 / 立会=赤 */
+
+  /* ===== トースト通知 ===== */
+  #toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #323232; color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  #toast.show { opacity: 1; }
+
+  /* ===== ローディング ===== */
+  #loading {
+    position: absolute; inset: 0; background: rgba(255,255,255,0.9);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 500; gap: 12px;
+  }
+  .spinner {
+    width: 40px; height: 40px; border: 4px solid #e0e0e0;
+    border-top-color: #4285f4; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { font-size: 13px; color: #666; }
+</style>
+</head>
+<body>
+
+<!-- ===== サイドバー ===== -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h2>担当者</h2>
+    <div class="add-staff-form">
+      <input type="text" id="new-staff-name" placeholder="名前を追加" maxlength="8">
+      <button class="btn-add" onclick="addStaff()">追加</button>
+    </div>
+  </div>
+  <div id="staff-list"></div>
+
+  <div id="drag-hint">🤚 ドラッグして物件に割り当て</div>
+  <div id="current-staff-badge" onclick="clearSelectedStaff()"></div>
+
+  <!-- よく使う場所 -->
+  <div id="places-panel">
+    <div id="places-header">
+      <span>📍 よく使う場所</span>
+      <button id="btn-add-place" onclick="showAddPlaceForm()">＋ 追加</button>
+    </div>
+    <div id="places-list"></div>
+    <div id="add-place-form" style="display:none;">
+      <input type="text" id="place-name-input" placeholder="名前（例: 自宅・会社）" maxlength="10">
+      <input type="text" id="place-addr-input" placeholder="住所">
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn-place-save" onclick="savePlace()">保存</button>
+        <button class="btn-place-cancel" onclick="hideAddPlaceForm()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== メイン ===== -->
+<div id="main">
+  <div id="topbar">
+    <button id="btn-menu" onclick="toggleSidebar()">☰</button>
+    <h1><span class="cam">📷</span> 撮影MAP <span class="badge-count" id="prop-count">0</span>件</h1>
+    <span class="badge-update" id="update-time"></span>
+    <select id="staff-filter" onchange="applyStaffFilter(this.value)">
+      <option value="">👤 全員表示</option>
+    </select>
+    <div class="topbar-spacer"></div>
+    <button class="mode-btn active" id="btn-normal" onclick="setMode('normal')">🗺 通常</button>
+    <button class="mode-btn" id="btn-nav" onclick="setMode('nav')">🧭 ナビ</button>
+    <button class="mode-btn" id="btn-list" onclick="setMode('list')">📋 リスト</button>
+    <button class="btn-refresh" onclick="refreshData()">🔄</button>
+  </div>
+
+  <div id="nav-bar">
+    <div id="nav-top-row">
+      <!-- スタート地点 -->
+      <div id="nav-start-wrap">
+        <label>🚩 スタート:</label>
+        <input type="text" id="nav-start-input" placeholder="現在地 or 住所を入力">
+        <select id="nav-start-places" onchange="selectStartPlace(this.value)" title="よく使う場所から選択">
+          <option value="">📍 場所を選択</option>
+        </select>
+      </div>
+      <!-- 追加地点（フリー入力） -->
+      <div id="nav-custom-stop-wrap">
+        <input type="text" id="nav-custom-stop-input" placeholder="経由地を追加（住所）">
+        <button class="btn-nav-add-stop" onclick="addCustomStop()">＋追加</button>
+      </div>
+      <!-- 一般道オプション -->
+      <label id="nav-road-toggle">
+        <input type="checkbox" id="nav-avoid-highways" checked>
+        高速回避（一般道）
+      </label>
+      <!-- ボタン群 -->
+      <button class="btn-nav-go" id="btn-nav-go" onclick="startNavigation()" disabled>🗺 ルート表示</button>
+      <button class="btn-nav-go" id="btn-nav-gmaps" onclick="openInGoogleMaps()" disabled style="background:#34a853;">📱 Gマップで開く</button>
+      <button class="btn-nav-clear" onclick="clearNavSelection()">クリア</button>
+    </div>
+    <!-- 選択済みウェイポイント一覧 -->
+    <div id="nav-waypoint-list"></div>
+    <!-- 結果サマリー -->
+    <div id="nav-summary" style="font-size:11px;opacity:0.8;width:100%;"></div>
+  </div>
+
+  <div id="map"></div>
+  <div id="drop-overlay"></div>
+
+  <!-- ===== 担当者ビューパネル ===== -->
+  <div id="list-panel">
+    <div id="list-panel-header">
+      <span id="list-panel-title">📋 担当者リスト</span>
+      <select id="list-staff-select" onchange="renderListPanel(this.value)">
+        <option value="">👤 担当者を選択</option>
+      </select>
+      <button id="btn-list-close" onclick="setMode('normal')">✕</button>
+    </div>
+    <div id="list-panel-body"></div>
+  </div>
+  <div id="loading"><div class="spinner"></div><p>地図を読み込み中…</p></div>
+</div>
+
+<div id="toast"></div>
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<script>
+// =============================================
+// CONFIG（Supabase URLとANON KEYをここに入れる）
+// =============================================
+const CONFIG = {
+  MAPS_API_KEY: 'AIzaSyD6zMhACB22Lgs_RJtQnfDAxuuX4jK235k',
+  SHEETS_API_KEY: 'AIzaSyBx95mmBtocBX3W6fvzCVW_RYc0qDCUgdY',
+  SPREADSHEET_ID: '1RRYhWFuQF2b5HIhmShT3rfl5u4CSDfFWSqP3-uClLkM',
+  SHEET_NAME: '今週',
+  PHOTOGRAPHER_COL: 'D',   // 撮影者列（スプシのカラム）
+  DATA_START_ROW: 4,        // 今週シートのデータ開始行（1-indexed、ヘッダー2行+セパレータ1行）
+  DATA_END_ROW: 30,         // 今週シートのデータ終了行（1-indexed）。この行までしか読み込まない
+  GAS_URL: 'https://script.google.com/macros/s/AKfycbxp9gHxsqK0EenS-cyzEHVBsBJZ_uzi6ctCyLA0G7sp9A0hNpnGuws7UzzEpTHN_xzflQ/exec',
+  SUPABASE_URL: 'https://bypticegujbxgvcctkju.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5cHRpY2VndWpieGd2Y2N0a2p1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0NzA3OTUsImV4cCI6MjA5NzA0Njc5NX0.4fzXRVUYKzkDDmOzEiq3PP0Wk8ZujdD7AJAYivnWgbc',
+};
+
+// =============================================
+// 物件データ（スプシから取得 or 静的データ）
+// =============================================
+
+// スプレッドシートの列マッピング（A=0, B=1, C=2...）
+// 実際の列順: 物上|コピー|他社|撮影者|日付|バイク|写真入れた？|番手|図面|UP|メイン写真|メインキャッチ|R-DB|UP済|内容|文字数|備考|完成確認|時期|状況|鍵対応|確認|区|図面リンク|両片|物件名|部屋番号|売主業者|価格|㎡|単価|間取り|....|住所|電話番号|鍵住所|鍵時刻|鍵備考
+const COL = {
+  OTHER_COMPANY:  2,  // C: 他社
+  PHOTOGRAPHER:   3,  // D: 撮影者
+  PERIOD:        18,  // S: 時期
+  STATUS:        19,  // T: 状況
+  KEY_TYPE:      20,  // U: 鍵対応
+  AREA:          22,  // W: 区
+  DRAWING_LINK:  23,  // X: 図面リンク
+  NAME:          25,  // Z: 物件名
+  ROOM:          26,  // AA: 部屋番号
+  PRICE:         28,  // AC: 価格
+  SQM:           29,  // AD: 面積(㎡)
+  PER_SQM:       30,  // AE: 単価
+  LAYOUT:        31,  // AF: 間取り
+  ADDRESS:       36,  // AK: 住所
+  TEL:           37,  // AL: 電話番号
+  KEY_ADDRESS:   38,  // AM: 鍵住所
+  KEY_TIME:      39,  // AN: 鍵時刻
+  IS_KOUJI:      -1,  // 該当列なし（常にfalse）
+};
+
+async function loadFromSheet() {
+  if (!CONFIG.SHEETS_API_KEY || !CONFIG.SPREADSHEET_ID) return null;
+
+  const range = encodeURIComponent(`${CONFIG.SHEET_NAME}!A${CONFIG.DATA_START_ROW}:AO${CONFIG.DATA_END_ROW}`);
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${range}?key=${CONFIG.SHEETS_API_KEY}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('スプシ読み込みエラー:', res.status, await res.text());
+      return null;
+    }
+    const data = await res.json();
+    const rows = data.values || [];
+    if (rows.length === 0) return null;
+
+    // 列マッピング確認用ログ（初回のみ）
+    if (rows[0]) {
+      console.log('📋 スプシ1行目データ（列確認用）:', rows[0].map((v, i) => `${String.fromCharCode(65+i)}:${v}`).join(' | '));
+    }
+
+    const props = [];
+    rows.forEach((row, i) => {
+      // 物件名が空の行はスキップ（セパレータ行など）
+      const name = (row[COL.NAME] || '').trim();
+      if (!name) return;
+      // 住所が空の行もスキップ
+      const address = (row[COL.ADDRESS] || '').trim();
+      if (!address) return;
+      // 状況が「撮影可」「工事中撮影可」のみ表示
+      const status = (row[COL.STATUS] || '').trim();
+      if (status !== '撮影可' && status !== '工事中撮影可') return;
+
+      const keyAddress = (row[COL.KEY_ADDRESS] || '').trim();
+      const keyType    = (row[COL.KEY_TYPE]    || '現地').trim();
+      const isKouji    = status === '工事中撮影可' || (COL.IS_KOUJI >= 0
+                         ? ((row[COL.IS_KOUJI] || '').trim() === '◯' || (row[COL.IS_KOUJI] || '').trim().toLowerCase() === 'true')
+                         : false);
+
+      props.push({
+        name,
+        room:          (row[COL.ROOM]          || '').trim(),
+        price:         (row[COL.PRICE]         || '0').replace(/[^\d.]/g, ''),
+        sqm:           (row[COL.SQM]           || '0').replace(/[^\d.]/g, ''),
+        per_sqm:       (row[COL.PER_SQM]       || '0').replace(/[^\d.]/g, ''),
+        layout:        (row[COL.LAYOUT]        || '').trim(),
+        address,
+        tel:           (row[COL.TEL]           || '').trim(),
+        key_address:   keyAddress,
+        key_time:      (row[COL.KEY_TIME]      || '').trim(),
+        photographer:  (row[COL.PHOTOGRAPHER]  || '').trim(),
+        other_company: (row[COL.OTHER_COMPANY] || '').trim(),
+        period:        (row[COL.PERIOD]        || '').trim(),
+        status:        (row[COL.STATUS]        || '').trim(),
+        key_type:      keyType,
+        area:          (row[COL.AREA]          || '').trim(),
+        drawing_link:  (row[COL.DRAWING_LINK]  || '').trim(),
+        is_kouji:      isKouji,
+        has_key_address: keyAddress.length > 3,
+        sheet_row:     CONFIG.DATA_START_ROW + i - 1, // 1-indexed（書き込み用）
+      });
+    });
+
+    console.log(`✅ スプシから${props.length}件読み込み完了`);
+    return props;
+  } catch(e) {
+    console.warn('スプシ読み込み例外:', e);
+    return null;
+  }
+}
+
+// フォールバック用の静的データ
+const PROPERTIES_STATIC = [{"name": "ライオンズマンション尾久第二", "room": "301", "price": "3080", "sqm": "43", "per_sqm": "71", "layout": "2LDK", "address": "東京都荒川区西尾久７丁目37-14", "tel": "03-5980-8190", "key_address": "ドア横　PS　キーボックス 2291", "key_time": "", "photographer": "高橋", "other_company": "4", "period": "完物", "status": "撮影可", "key_type": "現地", "area": "荒川区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90679511/zumen/1.pdf?", "is_kouji": false, "has_key_address": true, "sheet_row": 7}, {"name": "パークサイド八広", "room": "409", "price": "3500", "sqm": "61", "per_sqm": "57", "layout": "3DK", "address": "東京都墨田区八広６丁目52-15", "tel": "03-6821-5513", "key_address": "エントランス　左　雨どい　5755", "key_time": "", "photographer": "高橋", "other_company": "2", "period": "完物", "status": "撮影可", "key_type": "現地", "area": "墨田区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90679261/zumen/1.pdf?", "is_kouji": false, "has_key_address": true, "sheet_row": 8}, {"name": "パレ・ド・ルピナス南千住ＩＩＩ", "room": "5", "price": "4280", "sqm": "30", "per_sqm": "142", "layout": "1LDK", "address": "東京都台東区清川２丁目33-6", "tel": "8035986396", "key_address": "ピタットハウス南千住店 荒川区南千住4-7-1 03-3803-5566", "key_time": "", "photographer": "高橋", "other_company": "0", "period": "完物", "status": "撮影可", "key_type": "鍵借", "area": "台東区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90649719/zumen/1.pdf?", "is_kouji": false, "has_key_address": true, "sheet_row": 9}, {"name": "カエサル西尾久", "room": "205", "price": "2780", "sqm": "41", "per_sqm": "67", "layout": "1LDK", "address": "東京都荒川区西尾久８丁目31-13", "tel": "03-6661-1256", "key_address": "", "key_time": "", "photographer": "高橋", "other_company": "", "period": "完物", "status": "撮影可", "key_type": "現地", "area": "荒川区", "drawing_link": "https://contents.realestate-db.net/s1/images/bukken/1000003/713823054/zumen/1.pdf?", "is_kouji": false, "has_key_address": false, "sheet_row": 10}, {"name": "サンクタス下落合ミュゼオ・コートＡ", "room": "3", "price": "8380", "sqm": "54", "per_sqm": "155", "layout": "2LDK", "address": "東京都新宿区中落合１丁目2-18", "tel": "070-5545-0804", "key_address": "", "key_time": "", "photographer": "庄司", "other_company": "5以上", "period": "完物", "status": "撮影可", "key_type": "現地", "area": "新宿区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90678620/zumen/1.pdf?", "is_kouji": false, "has_key_address": false, "sheet_row": 11}, {"name": "フジメゾン千駄木", "room": "502", "price": "3980", "sqm": "40", "per_sqm": "99", "layout": "1LDK", "address": "東京都文京区千駄木３丁目42-4", "tel": "03-6661-1256", "key_address": "", "key_time": "", "photographer": "庄司", "other_company": "4", "period": "完物", "status": "撮影可", "key_type": "現地", "area": "文京区", "drawing_link": "https://contents.realestate-db.net/s1/images/bukken/1000003/713822763/zumen/1.pdf?", "is_kouji": false, "has_key_address": false, "sheet_row": 14}, {"name": "代々木スカイハイツ", "room": "306", "price": "4380", "sqm": "40", "per_sqm": "109", "layout": "1LDK", "address": "東京都渋谷区代々木４丁目", "tel": "090-4735-4812", "key_address": "", "key_time": "", "photographer": "庄司 13:00", "other_company": "1", "period": "完物", "status": "撮影可", "key_type": "立会", "area": "渋谷区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90678517/zumen/1.pdf?", "is_kouji": false, "has_key_address": false, "sheet_row": 15}, {"name": "オープンレジデンシア日本橋", "room": "6", "price": "9500", "sqm": "40", "per_sqm": "237", "layout": "1DK", "address": "東京都中央区日本橋本町１丁目7-11", "tel": "03-5826-4777", "key_address": "元浅草1-20-9で鍵仮", "key_time": "", "photographer": "山本", "other_company": "3", "period": "完物", "status": "撮影可", "key_type": "鍵借", "area": "中央区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90678339/zumen/1.pdf?", "is_kouji": false, "has_key_address": true, "sheet_row": 16}, {"name": "ライオンズマンション門前仲町第６", "room": "12", "price": "7980", "sqm": "54", "per_sqm": "147", "layout": "2LDK", "address": "東京都江東区冬木21-25", "tel": "03-6269-9571", "key_address": "", "key_time": "", "photographer": "山本", "other_company": "5以上", "period": "完物", "status": "撮影可", "key_type": "現地", "area": "江東区", "drawing_link": "https://contents.realestate-db.net/auto/images/bukken/999998/90670299/zumen/1.pdf?", "is_kouji": false, "has_key_address": false, "sheet_row": 18}];
+
+// =============================================
+// 状態管理
+// =============================================
+let map = null;
+let markers = [];           // {prop, marker, keyMarker, keyLine, infoWindow}
+let staffList = [];         // [{id, name, color}]
+let assignments = {};       // {propId: {staffId, staffName, staffColor, date}}
+let completions = {};       // {propId: true} 完了済み物件
+let visitOrder = {};        // {staffId: [propId, propId...]} 訪問順
+let selectedStaff = null;   // ドラッグ中の担当者
+let currentMode = 'normal';
+let navSelection = [];      // ナビ選択物件（最大2）
+let directionsRenderer = null;
+let directionsService = null;
+let geocodeCache = {};
+let propertiesData = PROPERTIES_STATIC; // スプシ読み込み後に上書き
+
+function propId(p) { return `${p.name}__${p.room}`; }
+
+// =============================================
+// Google Maps 初期化
+// =============================================
+async function initMap() {
+  map = new google.maps.Map(document.getElementById('map'), {
+    center: { lat: 35.6895, lng: 139.6917 },
+    zoom: 12,
+    mapTypeControlOptions: { mapTypeIds: ['roadmap', 'satellite', 'terrain'] },
+    fullscreenControl: true,
+    streetViewControl: false,
+  });
+
+  directionsService = new google.maps.DirectionsService();
+  directionsRenderer = new google.maps.DirectionsRenderer({ suppressMarkers: false });
+  directionsRenderer.setMap(map);
+
+  // ドロップ受け付け
+  map.getDiv().addEventListener('dragover', e => { e.preventDefault(); showDropOverlay(true); });
+  map.getDiv().addEventListener('dragleave', () => showDropOverlay(false));
+  map.getDiv().addEventListener('drop', e => { e.preventDefault(); showDropOverlay(false); handleMapDrop(e); });
+
+  // まずlocalStorageから読み込み（高速表示）
+  loadStaffFromStorage();
+  loadAssignmentsFromStorage();
+  loadCompletions();
+  loadVisitOrder();
+  loadSavedPlaces();
+  renderPlacesList();
+  cleanupInvalidSheetStaff();
+  renderStaffList();
+
+  // Supabaseから最新データを取得して上書き
+  document.getElementById('loading').querySelector('p').textContent = 'データを同期中…';
+  const synced = await loadFromSupabase();
+  if (synced) {
+    cleanupInvalidSheetStaff();
+    renderStaffList();
+    showToast('☁️ Supabaseから同期完了');
+  }
+
+  // スプレッドシートから物件データを読み込み
+  document.getElementById('loading').querySelector('p').textContent = 'スプシから物件データを読み込み中…';
+  const sheetProps = await loadFromSheet();
+  if (sheetProps && sheetProps.length > 0) {
+    propertiesData = sheetProps;
+    // スプシの撮影者列をMAPに反映
+    applySheetPhotographers(sheetProps);
+    showToast(`📊 スプシから${sheetProps.length}件読み込みました`);
+  } else {
+    propertiesData = PROPERTIES_STATIC;
+    showToast('⚠️ スプシ読み込み失敗。静的データを使用します');
+  }
+
+  geocodeAndPlaceMarkers();
+  document.getElementById('prop-count').textContent = propertiesData.length;
+}
+
+// =============================================
+// ジオコーディング & マーカー配置
+// =============================================
+async function geocodeAndPlaceMarkers() {
+  const geocoder = new google.maps.Geocoder();
+  let placed = 0, failed = 0;
+
+  // ローディングメッセージ更新
+  const loadingP = document.getElementById('loading').querySelector('p');
+
+  for (const prop of propertiesData) {
+    if (!prop.address || prop.address.length < 5) continue;
+
+    // 緯度経度が埋め込まれていればそのまま使う
+    if (prop.lat && prop.lng) {
+      const loc = new google.maps.LatLng(prop.lat, prop.lng);
+      placeMarker(prop, loc);
+      placed++;
+      continue;
+    }
+
+    loadingP.textContent = `ピン配置中… ${placed + failed + 1}/${propertiesData.length}`;
+    try {
+      const loc = await geocodeAddress(geocoder, prop.address);
+      if (loc) {
+        placeMarker(prop, loc);
+        placed++;
+      } else {
+        failed++;
+        console.warn('ジオコード結果なし:', prop.name, prop.address);
+      }
+    } catch(e) {
+      failed++;
+      console.warn('Geocode失敗:', prop.name, e);
+    }
+    await sleep(100);
+  }
+
+  console.log(`マーカー配置完了: ${placed}件成功 / ${failed}件失敗`);
+  if (failed > 0) showToast(`⚠️ ${failed}件のピン配置に失敗。Google CloudでGeocoding APIを有効にしてください`);
+
+  // 鍵住所マーカー
+  for (const m of markers) {
+    if (m.prop.has_key_address && m.prop.key_address && m.prop.key_address.length > 5) {
+      placeKeyMarker(m);
+    }
+  }
+
+  document.getElementById('loading').style.display = 'none';
+
+  // 完了状態をマーカーに反映
+  Object.keys(completions).forEach(pid => updateMarkerCompletion(pid));
+
+  // フィルタ中なら表示状態を再適用
+  if (activeStaffFilter) applyStaffFilter(activeStaffFilter);
+}
+
+function geocodeAddress(geocoder, address) {
+  if (geocodeCache[address]) return Promise.resolve(geocodeCache[address]);
+  return new Promise((resolve, reject) => {
+    const attempt = (retryCount) => {
+      geocoder.geocode({ address: address, region: 'JP' }, (results, status) => {
+        if (status === 'OK' && results[0]) {
+          const loc = results[0].geometry.location;
+          geocodeCache[address] = loc;
+          resolve(loc);
+        } else if (status === 'ZERO_RESULTS') {
+          resolve(null);
+        } else if (status === 'OVER_QUERY_LIMIT') {
+          if (retryCount < 5) {
+            console.log(`OVER_QUERY_LIMIT、${2000 * (retryCount+1)}ms後にリトライ: ${address}`);
+            setTimeout(() => attempt(retryCount + 1), 2000 * (retryCount + 1));
+          } else {
+            console.warn('リトライ上限超過:', address);
+            resolve(null);
+          }
+        } else {
+          console.warn(`Geocode ${status}: ${address}`);
+          resolve(null);
+        }
+      });
+    };
+    attempt(0);
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// =============================================
+// マーカー作成
+// =============================================
+function getKeyTypeColor(keyType) {
+  switch(keyType) {
+    case '現地': return { fill: '#2ecc71', border: '#27ae60' }; // 明るい緑
+    case '鍵借':  return { fill: '#f1c40f', border: '#d4ac0d' }; // 黄色
+    case '立会':  return { fill: '#e74c3c', border: '#c0392b' }; // 赤
+    default:      return { fill: '#95a5a6', border: '#7f8c8d' }; // グレー
+  }
+}
+
+function placeMarker(prop, location) {
+  const pid = propId(prop);
+  const assign = assignments[pid];
+
+  // 鍵対応種別でベースカラーを決定
+  const base = getKeyTypeColor(prop.key_type);
+  // 担当者が割り当て済みならボーダーを担当者カラーに
+  const borderColor = assign ? assign.staffColor : base.border;
+  const fillColor = base.fill;
+
+  const isKouji = prop.is_kouji;
+  const isKarikari = prop.key_type === '鍵借';
+  const keyWarning = isKarikari && (!prop.key_address || prop.key_address.length <= 5);
+
+  const staffName = assign ? assign.staffName : '';
+  const otherCount = prop.other_company || '';
+  const svg = createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount);
+  const baseW = isKouji ? 18 : 22;
+  const nameW = staffName ? Math.min(staffName.length, 4) * 11 + 10 : 0;
+  const hasOther = otherCount && String(otherCount).trim() !== '' && String(otherCount).trim() !== '0';
+  const iconW = baseW + nameW + (hasOther ? 18 : 0) + 6;
+  const iconAnchorX = nameW + 3 + (isKouji ? 9 : 11);
+  const icon = {
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(iconW, 60),
+    anchor: new google.maps.Point(iconAnchorX, isKouji ? 54 : 46),
+  };
+
+  const marker = new google.maps.Marker({
+    position: location,
+    map,
+    icon,
+    title: prop.name,
+    zIndex: assign ? 10 : 5,
+  });
+
+  // 工事中は点滅クラスをマーカー要素に付与
+  if (isKouji) {
+    google.maps.event.addListenerOnce(marker, 'domready', () => {
+      const el = marker.getIcon();
+      if (el) el.classList && el.classList.add('marker-kouji-wrap');
+    });
+    // マーカーのDIV要素に直接クラスを付与（遅延で）
+    setTimeout(() => {
+      const markerDiv = marker.get ? null : null;
+    }, 500);
+  }
+
+  marker.addListener('click', () => {
+    if (currentMode === 'nav') {
+      handleNavSelect(prop, marker, location);
+      return;
+    }
+    if (selectedStaff) {
+      // 情報ウィンドウを開いて日付を選んでから割り当てできるようにする
+      openInfoWindow(prop, marker, location);
+      // 少し待ってから日付ピッカーの下に「割り当てる」ボタンを追加
+      setTimeout(() => {
+        const pid = propId(prop);
+        const dateInput = document.getElementById(`iw-date-${pid}`);
+        if (dateInput && !document.getElementById(`iw-assign-btn-${pid}`)) {
+          const btn = document.createElement('button');
+          btn.id = `iw-assign-btn-${pid}`;
+          btn.textContent = `✅ ${selectedStaff.name} を割り当て`;
+          btn.style.cssText = 'margin-top:8px;width:100%;padding:9px;background:#4285f4;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;';
+          btn.onclick = () => {
+            let date = dateInput ? dateInput.value : '';
+            // YYYY-MM-DD形式なら M/D に変換
+            const m = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (m) date = `${parseInt(m[2])}/${parseInt(m[3])}`;
+            assignStaff(prop, selectedStaff, date);
+            // 情報ウィンドウを再描画
+            openInfoWindow(prop, marker, location);
+          };
+          dateInput.parentElement.parentElement.appendChild(btn);
+        }
+      }, 300);
+      return;
+    }
+    openInfoWindow(prop, marker, location);
+  });
+
+  const entry = { prop, marker, keyMarker: null, keyLine: null, infoWindow: null, location };
+  markers.push(entry);
+  return entry;
+}
+
+function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, orderNum) {
+  // ピン本体の幅（少し細く）・中心X
+  const pinW = isKouji ? 18 : 22;
+  const pinCX = pinW / 2;
+
+  // ラベル用の追加スペース計算
+  // 左上: 担当者名（最大4文字、1文字=11px、フォント拡大）
+  const nameText = staffName ? staffName.slice(0, 4) : '';
+  const nameW = nameText.length * 11;
+  // 右上: 他社数バッジ（丸数字、フォント拡大で幅18px）
+  const hasOther = otherCount !== null && otherCount !== undefined && String(otherCount).trim() !== '' && String(otherCount).trim() !== '0';
+
+  // SVG全体の幅: ピン + 左ラベル張り出し + 右バッジ張り出し + 太い縁線分の余白
+  const strokePad = 3; // 6px線の半分がクリップされないよう左右に余白
+  const leftExtra = (nameText ? nameW + 4 : 0) + strokePad;
+  const rightExtra = (hasOther ? 18 : 0) + strokePad;
+  const totalW = pinW + leftExtra + rightExtra;
+  const pinOffsetX = leftExtra; // ピン本体の左端X座標
+
+  // 他社数を丸数字に変換（1〜20対応、それ以上は●）
+  const circledNums = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯','⑰','⑱','⑲','⑳'];
+  const otherNum = parseInt(otherCount);
+  const otherBadge = (!isNaN(otherNum) && otherNum >= 1 && otherNum <= 20)
+    ? circledNums[otherNum - 1]
+    : (hasOther ? '●' : '');
+
+  // ピン本体パス（細め・pinOffsetX分ずらす）
+  const px = pinOffsetX;
+  const half = pinW / 2;
+  const pinPath = isKouji
+    ? `M${px+half} 10 C${px+half-6} 10 ${px+1} 16 ${px+1} 21 C${px+1} 32 ${px+half} 54 ${px+half} 54 C${px+half} 54 ${px+pinW-1} 32 ${px+pinW-1} 21 C${px+pinW-1} 16 ${px+half+6} 10 ${px+half} 10 Z`
+    : `M${px+half} 2 C${px+half-9} 2 ${px+2} 9 ${px+2} 15 C${px+2} 26 ${px+half} 46 ${px+half} 46 C${px+half} 46 ${px+pinW-2} 26 ${px+pinW-2} 15 C${px+pinW-2} 9 ${px+half+9} 2 ${px+half} 2 Z`;
+
+  // 訪問順バッジ（ピン下部に重ねて表示）
+  const orderSVG = orderNum ? (() => {
+    const cx = px + half;
+    const cy = isKouji ? 44 : 38;
+    const r = 9;
+    return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#1a73e8" stroke="white" stroke-width="1.5"/>
+    <text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="10" font-weight="900" fill="white" font-family="sans-serif">${orderNum}</text>`;
+  })() : '';
+
+  const svgH = 60; // ラベル拡大＋太い縁線に合わせて余白増やす
+  const anchorY = isKouji ? 54 : 46;
+
+  // ラベルSVGパーツ（フォント拡大）。工事中ピン(黒)の上では背景と被らない色にする
+  const nameLabelBg = isKouji ? 'rgba(255,255,255,0.92)' : 'rgba(20,20,20,0.8)';
+  const nameLabelTextColor = isKouji ? '#111111' : '#ffffff';
+  const nameLabelStroke = isKouji ? 'stroke="#222" stroke-width="1"' : '';
+  const nameSVG = nameText ? `
+    <rect x="0" y="0" width="${nameW + 6}" height="17" rx="3" fill="${nameLabelBg}" ${nameLabelStroke}/>
+    <text x="${(nameW+6)/2}" y="13" text-anchor="middle" font-size="13" font-weight="bold" fill="${nameLabelTextColor}" font-family="sans-serif">${nameText}</text>` : '';
+
+  const otherSVG = otherBadge ? `
+    <circle cx="${totalW - rightExtra/2 - 1}" cy="9" r="9" fill="#e53935" stroke="#ffffff" stroke-width="1.5"/>
+    <text x="${totalW - rightExtra/2 - 1}" y="13" text-anchor="middle" font-size="13" font-weight="900" font-family="sans-serif" fill="#000000">${otherBadge}</text>` : '';
+
+  // ピン内部アイコン
+  let pinInner = '';
+  if (isKouji) {
+    pinInner = `<text x="${px+half}" y="${10+15}" text-anchor="middle" font-size="10" font-weight="bold" fill="white" font-family="sans-serif">工</text>`;
+  } else if (keyWarning) {
+    pinInner = `<text x="${px+half}" y="22" text-anchor="middle" font-size="13" font-family="sans-serif">⚠️</text>`;
+  } else if (isKarikari) {
+    pinInner = `<text x="${px+half}" y="22" text-anchor="middle" font-size="12" font-family="sans-serif">🔑</text>`;
+  } else {
+    pinInner = `<circle cx="${px+half}" cy="14" r="5" fill="white" opacity="0.85"/>`;
+  }
+
+  // ピン枠線色（太く）
+  const strokeColor = keyWarning ? '#e74c3c' : borderColor;
+  const strokeW = keyWarning ? 6 : (isKouji ? 4 : 6);
+  const pinFill = isKouji ? '#222222' : fillColor;
+  const pinStroke = isKouji ? '#000000' : strokeColor;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${svgH}" viewBox="0 0 ${totalW} ${svgH}">
+    <path d="${pinPath}" fill="${pinFill}" stroke="${pinStroke}" stroke-width="${strokeW}"/>
+    ${pinInner}
+    ${orderSVG}
+    ${nameSVG}
+    ${otherSVG}
+  </svg>`;
+}
+
+// =============================================
+// 鍵マーカー & 点線
+// =============================================
+async function placeKeyMarker(entry) {
+  const { prop, location } = entry;
+  if (!prop.key_address || prop.key_address.length < 3) return;
+
+  // 鍵住所をジオコーディング
+  const geocoder = new google.maps.Geocoder();
+  // 鍵住所が住所っぽい場合のみジオコード、それ以外は物件の近くに表示
+  let keyLoc = null;
+  if (/東京|埼玉|千葉|神奈川|都|市|区|町|丁目/.test(prop.key_address)) {
+    keyLoc = await geocodeAddress(geocoder, prop.key_address);
+  }
+  if (!keyLoc) {
+    // 住所でない場合は物件から少しずらして配置
+    keyLoc = new google.maps.LatLng(
+      location.lat() + 0.0008,
+      location.lng() + 0.0008
+    );
+  }
+
+  const keySVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+    <circle cx="14" cy="14" r="12" fill="#f39c12" stroke="#e67e22" stroke-width="2"/>
+    <text x="14" y="19" text-anchor="middle" font-size="14">🔑</text>
+  </svg>`;
+
+  const keyMarker = new google.maps.Marker({
+    position: keyLoc,
+    map,
+    icon: {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(keySVG),
+      scaledSize: new google.maps.Size(28, 28),
+      anchor: new google.maps.Point(14, 14),
+    },
+    title: '鍵: ' + prop.key_address,
+    zIndex: 8,
+  });
+
+  // 点線
+  const keyLine = new google.maps.Polyline({
+    path: [location, keyLoc],
+    map,
+    strokeColor: '#f39c12',
+    strokeOpacity: 0,
+    strokeWeight: 2,
+    icons: [{
+      icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 },
+      offset: '0',
+      repeat: '10px',
+    }],
+  });
+
+  keyMarker.addListener('click', () => {
+    showToast(`🔑 ${prop.key_address}`);
+  });
+
+  entry.keyMarker = keyMarker;
+  entry.keyLine = keyLine;
+}
+
+// =============================================
+// 情報ウィンドウ
+// =============================================
+function openInfoWindow(prop, marker, location) {
+  // 既存を閉じる
+  markers.forEach(m => { if (m.infoWindow) { m.infoWindow.close(); m.infoWindow = null; } });
+
+  const pid = propId(prop);
+  const assign = assignments[pid];
+
+  const today2 = new Date();
+  const todayStr = `${today2.getMonth()+1}/${today2.getDate()}`;
+  // 既存の日付がYYYY-MM-DD形式なら M/D に変換
+  const rawDate = assign?.date || '';
+  const currentDate = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    ? `${parseInt(rawDate.split('-')[1])}/${parseInt(rawDate.split('-')[2])}`
+    : (rawDate || todayStr);
+
+  const assignHtml = assign
+    ? `<div class="iw-assign-wrap">
+        <span class="iw-assign-dot" style="background:${assign.staffColor}"></span>
+        <span class="iw-assign-name">${assign.staffName}</span>
+        <button class="iw-btn-unassign" onclick="unassignStaff('${pid}')">✕ 解除</button>
+       </div>
+       <div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+         <span style="font-size:11px;color:#888;">📅 日付</span>
+         <input type="text" id="iw-date-${pid}" value="${currentDate}" placeholder="6/27" style="font-size:12px;border:1px solid #ddd;border-radius:5px;padding:3px 6px;flex:1;width:60px;"
+           onchange="updateAssignDate('${pid}', this.value)">
+       </div>`
+    : `<div style="font-size:11px;color:#aaa;margin-top:6px;">
+        <div style="margin-bottom:6px;">担当者未割当</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:11px;color:#888;">📅 日付</span>
+          <input type="text" id="iw-date-${pid}" value="${todayStr}" placeholder="6/27" style="font-size:12px;border:1px solid #ddd;border-radius:5px;padding:3px 6px;flex:1;width:60px;">
+        </div>
+       </div>`;
+
+  const keyHtml = prop.has_key_address && prop.key_address
+    ? `<div class="iw-key-box"><strong>🔑 鍵の場所</strong>${prop.key_address}${prop.key_time ? '<br>⏰ ' + prop.key_time : ''}</div>`
+    : '';
+
+  const content = `<div class="iw-wrap">
+    <div class="iw-name">${prop.name}</div>
+    <div class="iw-room">${prop.room}号室 · ${prop.area}</div>
+    <div class="iw-row"><span class="iw-label">価格</span><span class="iw-val">${parseInt(prop.price||0).toLocaleString()}万円 / ${prop.layout}</span></div>
+    <div class="iw-row"><span class="iw-label">面積</span><span class="iw-val">${prop.sqm}㎡ (坪単価${prop.per_sqm}万)</span></div>
+    <div class="iw-row"><span class="iw-label">電話</span><span class="iw-val"><a href="tel:${prop.tel}">${prop.tel}</a></span></div>
+    <div class="iw-row"><span class="iw-label">住所</span><span class="iw-val">${prop.address}</span></div>
+    <div class="iw-row"><span class="iw-label">鍵種別</span><span class="iw-val">${prop.key_type}</span></div>
+    ${keyHtml}
+    <hr class="iw-divider">
+    ${assignHtml}
+    <div style="margin-top:8px;">
+      <a class="iw-link" href="${prop.drawing_link}" target="_blank">📄 図面を開く</a>
+    </div>
+    <button class="iw-nav-btn" onclick="startNavTo('${prop.address}')">🧭 ナビ（MAP内）</button>
+    <button class="iw-nav-btn" style="background:#34a853;margin-top:4px;" onclick="navToFromList('${prop.address}')">📱 Googleマップで開く</button>
+    <button class="iw-nav-btn${completions[pid] ? ' done-active' : ''}" style="background:${completions[pid] ? '#43a047' : '#ff7043'};margin-top:4px;" onclick="toggleCompletion('${pid}', ''); openInfoWindow(arguments[0]||null, null, null, '${pid}')">
+      ${completions[pid] ? '✅ 完了済み（タップで取消）' : '○ 完了にする'}
+    </button>
+  </div>`;
+
+  const iw = new google.maps.InfoWindow({ content });
+  iw.open(map, marker);
+  const entry = markers.find(m => m.prop === prop);
+  if (entry) entry.infoWindow = iw;
+}
+
+// 割り当て済み物件の日付だけ更新
+function updateAssignDate(pid, dateStr) {
+  if (!assignments[pid]) return;
+  assignments[pid].date = dateStr;
+  saveAssignmentsToStorage();
+  // スプシの日付列(E列)だけ更新
+  const entry = markers.find(m => propId(m.prop) === pid);
+  if (entry) {
+    const staff = staffList.find(s => s.id === assignments[pid].staffId);
+    writeToSheet(entry.prop, staff, assignments[pid].staffName, dateStr);
+  }
+  showToast(`📅 日付を更新: ${dateStr}`);
+}
+
+// =============================================
+// 担当者割り当て
+// =============================================
+function assignStaff(prop, staff, dateStr) {
+  const pid = propId(prop);
+  const today = new Date();
+  const date = dateStr || `${today.getMonth()+1}/${today.getDate()}`;
+
+  assignments[pid] = {
+    staffId: staff.id,
+    staffName: staff.name,
+    staffColor: staff.color,
+    date,
+  };
+
+  saveAssignmentsToStorage();
+  updateMarkerColor(prop);
+  showToast(`✅ ${prop.name} → ${staff.name}`);
+
+  // Supabaseに保存
+  saveAssignmentToSupabase(prop, staff, date);
+  // スプシに書き込み（担当者名 + 日付）
+  writeToSheet(prop, staff, staff.name, date);
+
+  // フィルタ中なら表示状態を再適用
+  if (activeStaffFilter) applyStaffFilter(activeStaffFilter);
+}
+
+function unassignStaff(pid) {
+  delete assignments[pid];
+  saveAssignmentsToStorage();
+  deleteAssignmentFromSupabase(pid);
+  const entry = markers.find(m => propId(m.prop) === pid);
+  if (entry) {
+    updateMarkerColor(entry.prop);
+    if (entry.infoWindow) { entry.infoWindow.close(); entry.infoWindow = null; }
+  }
+  showToast('割り当てを解除しました');
+
+  // フィルタ中なら表示状態を再適用
+  if (activeStaffFilter) applyStaffFilter(activeStaffFilter);
+}
+
+function updateMarkerColor(prop) {
+  const pid = propId(prop);
+  const assign = assignments[pid];
+  const color = assign ? assign.staffColor : '#e74c3c';
+  const borderColor = assign ? assign.staffColor : '#c0392b';
+  const entry = markers.find(m => m.prop === prop);
+  if (!entry) return;
+  const isKarikari = prop.key_type === '鍵借';
+  const keyWarning = isKarikari && (!prop.key_address || prop.key_address.length <= 5);
+  const staffName2 = assign ? assign.staffName : '';
+  const otherCount2 = prop.other_company || '';
+  const orderNum = entry._orderNum || null;
+  const svg = createMarkerSVG(color, borderColor, prop.is_kouji, isKarikari, keyWarning, staffName2, otherCount2, orderNum);
+  const baseW2 = prop.is_kouji ? 18 : 22;
+  const nameW2 = staffName2 ? Math.min(staffName2.length, 4) * 11 + 10 : 0;
+  const hasOther2 = otherCount2 && String(otherCount2).trim() !== '' && String(otherCount2).trim() !== '0';
+  const iconW2 = baseW2 + nameW2 + (hasOther2 ? 18 : 0) + 6;
+  const iconAX2 = nameW2 + 3 + (prop.is_kouji ? 9 : 11);
+  entry.marker.setIcon({
+    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+    scaledSize: new google.maps.Size(iconW2, 60),
+    anchor: new google.maps.Point(iconAX2, prop.is_kouji ? 54 : 46),
+  });
+  entry.marker.setZIndex(assign ? 10 : 5);
+}
+
+// =============================================
+// ドラッグ & ドロップ
+// =============================================
+let dragStaff = null;
+
+function onStaffDragStart(e, staff) {
+  dragStaff = staff;
+  selectedStaff = staff;
+  e.dataTransfer.effectAllowed = 'copy';
+  e.dataTransfer.setData('text/plain', staff.id);
+  document.querySelectorAll('.staff-item').forEach(el => el.classList.remove('selected-drag'));
+  e.target.classList.add('dragging');
+  showCurrentBadge(staff);
+  showDropOverlay(true);
+}
+
+function onStaffDragEnd(e) {
+  e.target.classList.remove('dragging');
+  showDropOverlay(false);
+}
+
+function handleMapDrop(e) {
+  if (!dragStaff) return;
+  const rect = map.getDiv().getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  // ピクセル→LatLng変換
+  const projection = map.getProjection();
+  if (!projection) return;
+  const bounds = map.getBounds();
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  const lng = sw.lng() + (ne.lng() - sw.lng()) * (x / rect.width);
+  const lat = ne.lat() - (ne.lat() - sw.lat()) * (y / rect.height);
+  const dropLatLng = new google.maps.LatLng(lat, lng);
+
+  // 最も近い物件を探す
+  let nearest = null, minDist = Infinity;
+  for (const entry of markers) {
+    const d = google.maps.geometry.spherical.computeDistanceBetween(dropLatLng, entry.location);
+    if (d < minDist) { minDist = d; nearest = entry; }
+  }
+  if (nearest && minDist < 500) {
+    assignStaff(nearest.prop, dragStaff);
+  } else {
+    showToast('物件の近くにドロップしてください');
+  }
+  dragStaff = null;
+  showDropOverlay(false);
+}
+
+function showDropOverlay(show) {
+  document.getElementById('drop-overlay').classList.toggle('visible', show);
+}
+
+function showCurrentBadge(staff) {
+  const badge = document.getElementById('current-staff-badge');
+  badge.style.display = 'block';
+  badge.style.background = staff.color;
+  badge.textContent = `📷 ${staff.name}`;
+}
+
+function clearSelectedStaff() {
+  selectedStaff = null;
+  dragStaff = null;
+  document.getElementById('current-staff-badge').style.display = 'none';
+}
+
+// =============================================
+// 担当者リスト管理
+// =============================================
+function renderStaffList() {
+  const list = document.getElementById('staff-list');
+  list.innerHTML = '';
+  staffList.forEach(staff => {
+    const div = document.createElement('div');
+    div.className = 'staff-item';
+    div.draggable = true;
+    div.style.position = 'relative';
+
+    // 隠しカラーピッカー（ドットをクリックで開く）
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    colorInput.value = staff.color;
+    colorInput.className = 'staff-color-input';
+    colorInput.addEventListener('input', e => {
+      staff.color = e.target.value;
+      dot.style.background = e.target.value;
+    });
+    colorInput.addEventListener('change', e => {
+      staff.color = e.target.value;
+      saveStaffToStorage();
+      updateStaffColorInSupabase(staff);
+      // 割り当て済みの物件マーカーも更新
+      Object.keys(assignments).forEach(pid => {
+        if (assignments[pid].staffId === staff.id) {
+          assignments[pid].staffColor = staff.color;
+          const entry = markers.find(m => propId(m.prop) === pid);
+          if (entry) updateMarkerColor(entry.prop);
+        }
+      });
+      saveAssignmentsToStorage();
+      if (selectedStaff && selectedStaff.id === staff.id) {
+        selectedStaff.color = staff.color;
+        showCurrentBadge(staff);
+      }
+    });
+
+    const dot = document.createElement('span');
+    dot.className = 'staff-dot';
+    dot.style.background = staff.color;
+    dot.title = 'クリックで色変更';
+    dot.addEventListener('click', e => {
+      e.stopPropagation();
+      colorInput.click();
+    });
+
+    const name = document.createElement('span');
+    name.className = 'staff-name';
+    name.textContent = staff.name;
+
+    const del = document.createElement('button');
+    del.className = 'btn-del';
+    del.textContent = '✕';
+    del.addEventListener('click', e => { e.stopPropagation(); removeStaff(staff.id); });
+
+    div.appendChild(colorInput);
+    div.appendChild(dot);
+    div.appendChild(name);
+    div.appendChild(del);
+
+    div.addEventListener('dragstart', e => onStaffDragStart(e, staff));
+    div.addEventListener('dragend', onStaffDragEnd);
+    div.addEventListener('click', () => {
+      if (selectedStaff && selectedStaff.id === staff.id) {
+        clearSelectedStaff();
+      } else {
+        selectStaffAndClose(staff);
+      }
+    });
+    list.appendChild(div);
+  });
+  renderStaffFilterOptions();
+}
+
+// =============================================
+// 担当者フィルタ（地図上の表示/非表示切り替え）
+// =============================================
+let activeStaffFilter = ''; // 選択中の担当者ID（空文字=全員表示）
+
+function renderStaffFilterOptions() {
+  const sel = document.getElementById('staff-filter');
+  if (!sel) return;
+  const prevValue = sel.value;
+  sel.innerHTML = '<option value="">👤 全員表示</option>';
+  staffList.forEach(staff => {
+    const opt = document.createElement('option');
+    opt.value = staff.id;
+    opt.textContent = staff.name;
+    sel.appendChild(opt);
+  });
+  // 以前の選択が依然リストにあれば復元
+  if (prevValue && staffList.some(s => s.id === prevValue)) {
+    sel.value = prevValue;
+  } else if (prevValue && prevValue !== '') {
+    // 選んでいた担当者が削除された場合はフィルタ解除
+    activeStaffFilter = '';
+    sel.value = '';
+  }
+}
+
+function applyStaffFilter(staffId) {
+  activeStaffFilter = staffId;
+  const staff = staffList.find(s => s.id === staffId);
+  const targetName = staff ? staff.name : '';
+
+  markers.forEach(entry => {
+    let visible = true;
+    if (targetName) {
+      const sheetText = (entry.prop.photographer || '').trim();
+      const pid = propId(entry.prop);
+      const assign = assignments[pid];
+
+      if (sheetText) {
+        // スプシに撮影者が入っている → スプシの値のみで判定（assignmentsは無視）
+        visible = sheetText.startsWith(targetName) || sheetText.includes(targetName);
+      } else {
+        // スプシに撮影者が空 → MAP上で手動割り当てした場合のみ表示
+        visible = !!(assign && assign.staffName === targetName);
+      }
+    }
+    entry.marker.setVisible(visible);
+    if (entry.keyMarker) entry.keyMarker.setVisible(visible);
+    if (entry.keyLine) entry.keyLine.setVisible(visible);
+  });
+
+  if (targetName) {
+    const visibleCount = markers.filter(m => m.marker.getVisible()).length;
+    showToast(`👤 ${targetName} の物件を表示中（${visibleCount}件）`);
+  } else {
+    showToast('👤 全員表示に戻しました');
+  }
+}
+
+// 見やすいランダムカラーを生成（彩度・明度を固定して鮮やかな色のみ）
+const PRESET_COLORS = [
+  '#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c',
+  '#3498db','#9b59b6','#e91e63','#00bcd4','#8bc34a',
+  '#ff5722','#607d8b','#795548','#673ab7','#009688',
+  '#cddc39','#ff9800','#f06292','#4db6ac','#7986cb',
+];
+let colorIndex = 0;
+
+function getNextColor() {
+  // 既存担当者が使っていない色を優先
+  const usedColors = new Set(staffList.map(s => s.color));
+  for (let i = 0; i < PRESET_COLORS.length; i++) {
+    const c = PRESET_COLORS[(colorIndex + i) % PRESET_COLORS.length];
+    if (!usedColors.has(c)) {
+      colorIndex = (colorIndex + i + 1) % PRESET_COLORS.length;
+      return c;
+    }
+  }
+  // 全色使用済みならランダム
+  colorIndex = (colorIndex + 1) % PRESET_COLORS.length;
+  return PRESET_COLORS[colorIndex];
+}
+
+function addStaff() {
+  const nameEl = document.getElementById('new-staff-name');
+  const name = nameEl.value.trim();
+  if (!name) { nameEl.focus(); return; }
+  const color = getNextColor();
+  const staff = { id: 'staff_' + Date.now(), name, color };
+  staffList.push(staff);
+  saveStaffToStorage();
+  renderStaffList();
+  nameEl.value = '';
+  showToast(`${name} を追加しました（色はドットをクリックで変更できます）`);
+  saveStaffToSupabase(staff);
+}
+
+function removeStaff(id) {
+  staffList = staffList.filter(s => s.id !== id);
+  saveStaffToStorage();
+  renderStaffList();
+  if (selectedStaff && selectedStaff.id === id) clearSelectedStaff();
+  deleteStaffFromSupabase(id);
+}
+
+// =============================================
+// ナビモード（最大10件・スタート地点指定・追加地点・一般道）
+// =============================================
+const NAV_MAX = 10;
+let navLabelOverlays = [];
+let customStops = [];
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('btn-normal').classList.toggle('active', mode === 'normal');
+  document.getElementById('btn-nav').classList.toggle('active', mode === 'nav');
+  document.getElementById('btn-list').classList.toggle('active', mode === 'list');
+  document.getElementById('nav-bar').classList.toggle('visible', mode === 'nav');
+  document.getElementById('list-panel').classList.toggle('visible', mode === 'list');
+  if (mode === 'normal') {
+    clearNavSelection();
+    if (directionsRenderer) directionsRenderer.setDirections({ routes: [] });
+    // 訪問順バッジをクリア
+    markers.forEach(entry => {
+      if (entry._orderNum) { entry._orderNum = null; updateMarkerColor(entry.prop); }
+    });
+  }
+  if (mode === 'list') {
+    updateListStaffSelect();
+    // フィルタ中の担当者があれば自動選択
+    const sel = document.getElementById('list-staff-select');
+    if (activeStaffFilter) {
+      sel.value = activeStaffFilter;
+      renderListPanel(activeStaffFilter);
+    } else if (staffList.length > 0) {
+      sel.value = staffList[0].id;
+      renderListPanel(staffList[0].id);
+    }
+  }
+}
+
+function handleNavSelect(prop, marker, location) {
+  const pid = propId(prop);
+  const existing = navSelection.findIndex(n => n.type === 'prop' && propId(n.prop) === pid);
+  if (existing >= 0) {
+    navSelection.splice(existing, 1);
+  } else {
+    if (navSelection.length >= NAV_MAX) { showToast(`最大${NAV_MAX}件まで選択できます`); return; }
+    navSelection.push({ type: 'prop', prop, marker, location, label: prop.name });
+  }
+  updateNavBar();
+  updateNavMarkerLabels();
+}
+
+function addCustomStop() {
+  const input = document.getElementById('nav-custom-stop-input');
+  const addr = input.value.trim();
+  if (!addr) { input.focus(); return; }
+  navSelection.push({ type: 'custom', label: addr, address: addr, location: null });
+  input.value = '';
+  updateNavBar();
+  showToast(`📍 「${addr}」を追加しました`);
+}
+
+function removeNavStop(idx) {
+  navSelection.splice(idx, 1);
+  updateNavBar();
+  updateNavMarkerLabels();
+}
+
+function updateNavMarkerLabels() {
+  navLabelOverlays.forEach(o => o.setMap(null));
+  navLabelOverlays = [];
+  let num = 1;
+  navSelection.forEach(item => {
+    if (item.type === 'prop' && item.location) {
+      const lbl = new google.maps.Marker({
+        position: item.location, map,
+        label: { text: String(num++), color: '#fff', fontSize: '11px', fontWeight: 'bold' },
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 12, fillColor: '#1a73e8', fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 },
+        zIndex: 200,
+      });
+      navLabelOverlays.push(lbl);
+    }
+  });
+}
+
+function updateNavBar() {
+  const list = document.getElementById('nav-waypoint-list');
+  const btnGo = document.getElementById('btn-nav-go');
+  const btnGmaps = document.getElementById('btn-nav-gmaps');
+  const summary = document.getElementById('nav-summary');
+  if (navSelection.length === 0) {
+    list.innerHTML = '<span style="font-size:12px;opacity:0.7;">物件をタップして選択、または経由地を入力（最大10件）</span>';
+    summary.textContent = '';
+  } else {
+    list.innerHTML = navSelection.map((n, i) => `
+      <span onclick="removeNavStop(${i})" title="クリックで削除"
+        style="display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,0.2);
+        border-radius:12px;padding:3px 8px;font-size:11px;cursor:pointer;">
+        <b>${i+1}.</b> ${n.type==='custom'?'📍':'🏠'} ${n.label.length>15?n.label.slice(0,15)+'…':n.label}
+        <span style="opacity:0.6;margin-left:2px;">✕</span>
+      </span>`).join('');
+  }
+  const enough = navSelection.length >= 1;
+  btnGo.disabled = !enough;
+  btnGmaps.disabled = !enough;
+}
+
+async function startNavigation() {
+  if (navSelection.length < 1) return;
+  const avoidHighways = document.getElementById('nav-avoid-highways').checked;
+  const startInput = document.getElementById('nav-start-input').value.trim();
+  const geocoder = new google.maps.Geocoder();
+
+  // スタート地点
+  let origin;
+  if (startInput) {
+    origin = await geocodeAddress(geocoder, startInput);
+    if (!origin) { showToast('スタート地点が見つかりませんでした'); return; }
+  } else {
+    try { origin = await getCurrentPosition(); }
+    catch(e) { showToast('現在地を取得できません。スタート地点を入力してください'); document.getElementById('nav-start-input').focus(); return; }
+  }
+
+  // カスタムストップのジオコード
+  for (const stop of navSelection) {
+    if (stop.type === 'custom' && !stop.location) {
+      stop.location = await geocodeAddress(geocoder, stop.address);
+      if (!stop.location) showToast(`⚠️ 「${stop.label}」の住所が見つかりませんでした`);
+    }
+  }
+
+  const valid = navSelection.filter(s => s.location);
+  if (valid.length === 0) { showToast('有効な経由地がありません'); return; }
+
+  const destination = valid[valid.length - 1].location;
+  const waypoints = valid.slice(0, -1).map(s => ({ location: s.location, stopover: true }));
+
+  directionsService.route({
+    origin, destination, waypoints,
+    optimizeWaypoints: false,
+    travelMode: google.maps.TravelMode.DRIVING,
+    avoidHighways: avoidHighways,
+    avoidTolls: false,
+  }, (result, status) => {
+    if (status === 'OK') {
+      directionsRenderer.setDirections(result);
+      const legs = result.routes[0].legs;
+      const totalSec = legs.reduce((s, l) => s + l.duration.value, 0);
+      const totalM = legs.reduce((s, l) => s + l.distance.value, 0);
+      const totalMin = Math.round(totalSec / 60);
+      const totalKm = (totalM / 1000).toFixed(1);
+      const detail = legs.map((l, i) => `${i+1}→${i+2}: ${l.duration.text}`).join(' / ');
+      document.getElementById('nav-summary').textContent = `合計 約${totalMin}分 / ${totalKm}km　${detail}`;
+      showToast(`🚗 合計 約${totalMin}分 / ${totalKm}km`);
+    } else {
+      showToast('ルート取得失敗: ' + status);
+    }
+  });
+}
+
+function getCurrentPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject('非対応'); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve(new google.maps.LatLng(pos.coords.latitude, pos.coords.longitude)),
+      err => reject(err), { timeout: 8000 }
+    );
+  });
+}
+
+function openInGoogleMaps() {
+  if (navSelection.length < 1) return;
+  const startInput = document.getElementById('nav-start-input').value.trim();
+  const valid = navSelection.filter(s => s.address || s.prop);
+  const dest = encodeURIComponent((valid[valid.length-1].address || valid[valid.length-1].prop.address));
+  const waypts = valid.slice(0,-1).map(s => encodeURIComponent(s.address || s.prop.address)).join('|');
+  let url = `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+  if (startInput) url += `&origin=${encodeURIComponent(startInput)}`;
+  if (waypts) url += `&waypoints=${waypts}`;
+  window.open(url, '_blank');
+}
+
+function startNavTo(address) {
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+  window.open(url, '_blank');
+}
+
+function clearNavSelection() {
+  navSelection = [];
+  navLabelOverlays.forEach(o => o.setMap(null));
+  navLabelOverlays = [];
+  const si = document.getElementById('nav-start-input');
+  const ci = document.getElementById('nav-custom-stop-input');
+  if (si) si.value = '';
+  if (ci) ci.value = '';
+  updateNavBar();
+}
+
+// =============================================
+// スプシ撮影者 → MAP反映
+// =============================================
+function applySheetPhotographers(props) {
+  let added = 0;
+  // 担当者名として明らかに不適切な文字列（日付・予定・記号のみなど）を除外
+  const invalidNamePatterns = [
+    /^\d/,                          // 数字始まり（日付など: "6/19..."）
+    /予定|未定|希望|不明|要確認|なし|未|誰か|行く|決定|相談|連絡|確認中/,  // 状態を示す語が含まれる
+    /^[\d\/\-:：\s]+$/,             // 数字・記号のみ
+  ];
+  function isValidStaffName(name) {
+    if (!name || name.length === 0 || name.length > 10) return false;
+    return !invalidNamePatterns.some(p => p.test(name));
+  }
+
+  props.forEach(prop => {
+    if (!prop.photographer) return;
+    const pid = propId(prop);
+    // すでに割り当て済みならスキップ
+    if (assignments[pid]) return;
+    const rawName = prop.photographer.trim();
+    if (!rawName) return;
+    // 名前の正規化: 全角スペース/改行を半角スペースに統一後、先頭の漢字・カナ・英字部分のみ抜き出す
+    // 例: "庄司 13:00" → "庄司"、"高橋6/14" → "高橋"、"庄司　14:30" → "庄司"
+    const cleaned = rawName.replace(/\u3000/g, ' ').replace(/\n/g, ' ').trim();
+    const nameMatch = cleaned.match(/^[\u4E00-\u9FFF\u3040-\u30FF\uFF66-\uFF9Dａ-ｚＡ-Ｚa-zA-Z]+/);
+    const normalizedName = (nameMatch ? nameMatch[0] : '').trim();
+    // 日付・予定など人名でないものはスキップ（担当者登録しない）
+    if (!isValidStaffName(normalizedName)) return;
+    // staffListの中に正規化名で一致する担当者を探す
+    let staff = staffList.find(s => s.name === normalizedName);
+    if (!staff) {
+      // いなければ自動追加
+      const color = getNextColor();
+      staff = { id: 'staff_sheet_' + encodeURIComponent(normalizedName), name: normalizedName, color };
+      staffList.push(staff);
+      saveStaffToStorage();
+      saveStaffToSupabase(staff);
+    }
+    assignments[pid] = {
+      staffId: staff.id,
+      staffName: staff.name,
+      staffColor: staff.color,
+      date: rawName, // 元の文字列（時刻含む）は日付欄に保持
+    };
+    added++;
+  });
+  if (added > 0) {
+    saveAssignmentsToStorage();
+    renderStaffList();
+    console.log(`📋 スプシ撮影者から${added}件を反映`);
+  }
+}
+
+// =============================================
+// スプレッドシート書き込み
+// =============================================
+async function writeToSheet(prop, staff, nameStr, dateStr) {
+  if (!prop.sheet_row) return;
+
+  // ① GAS WebApp経由
+  if (CONFIG.GAS_URL) {
+    try {
+      // GASはCORSヘッダーを返さないためno-corsで送信（レスポンスは読めないがリクエストは届く）
+      await fetch(CONFIG.GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          spreadsheetId: CONFIG.SPREADSHEET_ID,
+          sheetName: CONFIG.SHEET_NAME,
+          row: prop.sheet_row + 1,
+          photographerValue: nameStr,
+          dateValue: dateStr || '',
+        }),
+      });
+      // no-corsではレスポンスが読めないが、エラーなければ届いているとみなす
+      showToast(`📝 スプシ送信: ${prop.name} → ${nameStr}${dateStr ? ' ' + dateStr : ''}`);
+      return;
+    } catch(e) {
+      console.warn('GAS書き込みエラー:', e);
+    }
+  }
+
+  // ② Sheets API v4（フォールバック）
+  if (CONFIG.SHEETS_API_KEY) {
+    const row = prop.sheet_row + 1;
+    const colLetter = colIndexToLetter(COL.PHOTOGRAPHER);
+    const range = `${CONFIG.SHEET_NAME}!${colLetter}${row}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${CONFIG.SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=RAW&key=${CONFIG.SHEETS_API_KEY}`;
+    try {
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [[nameStr]] }),
+      });
+      if (res.ok) {
+        showToast(`📝 スプシ更新: ${prop.name} → ${nameStr}`);
+      }
+    } catch(e) { console.error('スプシ書き込みエラー:', e); }
+  }
+}
+
+// 列番号(0-indexed) → アルファベット変換 (0→A, 25→Z, 26→AA...)
+function colIndexToLetter(n) {
+  let s = '';
+  n++;
+  while (n > 0) {
+    n--;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+}
+
+// =============================================
+// Supabase連携（読み込み・保存・削除）
+// =============================================
+function supabaseHeaders() {
+  return {
+    'apikey': CONFIG.SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function loadFromSupabase() {
+  if (!CONFIG.SUPABASE_URL) return false;
+  try {
+    // 担当者を取得
+    const sRes = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/staff?order=created_at.asc`, {
+      headers: supabaseHeaders(),
+    });
+    if (sRes.ok) {
+      const sData = await sRes.json();
+      if (sData.length > 0) {
+        staffList = sData.map(s => ({ id: s.id, name: s.name, color: s.color }));
+        saveStaffToStorage();
+      }
+    }
+
+    // 割り当てを取得
+    const aRes = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/assignments?order=updated_at.desc`, {
+      headers: supabaseHeaders(),
+    });
+    if (aRes.ok) {
+      const aData = await aRes.json();
+      assignments = {};
+      aData.forEach(a => {
+        const staff = staffList.find(s => s.id === a.staff_id);
+        assignments[a.property_id] = {
+          staffId: a.staff_id,
+          staffName: a.staff_name,
+          staffColor: staff ? staff.color : '#999',
+          date: a.assigned_date,
+        };
+      });
+      saveAssignmentsToStorage();
+    }
+    return true;
+  } catch(e) {
+    console.warn('Supabase読み込みエラー:', e);
+    return false;
+  }
+}
+
+async function saveStaffToSupabase(staff) {
+  if (!CONFIG.SUPABASE_URL) return;
+  try {
+    await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/staff`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ id: staff.id, name: staff.name, color: staff.color }),
+    });
+  } catch(e) { console.warn('Supabase staff save error:', e); }
+}
+
+async function updateStaffColorInSupabase(staff) {
+  if (!CONFIG.SUPABASE_URL) return;
+  try {
+    await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/staff?id=eq.${staff.id}`, {
+      method: 'PATCH',
+      headers: { ...supabaseHeaders(), 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ color: staff.color }),
+    });
+  } catch(e) { console.warn('Supabase staff color update error:', e); }
+}
+
+async function deleteStaffFromSupabase(id) {
+  if (!CONFIG.SUPABASE_URL) return;
+  try {
+    await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/staff?id=eq.${id}`, {
+      method: 'DELETE',
+      headers: supabaseHeaders(),
+    });
+  } catch(e) { console.warn('Supabase staff delete error:', e); }
+}
+
+async function saveAssignmentToSupabase(prop, staff, date) {
+  if (!CONFIG.SUPABASE_URL) return;
+  try {
+    await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/assignments`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        property_id: propId(prop),
+        property_name: prop.name,
+        room: prop.room,
+        staff_id: staff.id,
+        staff_name: staff.name,
+        assigned_date: date,
+        sheet_row: prop.sheet_row,
+      }),
+    });
+  } catch(e) { console.warn('Supabase assignment save error:', e); }
+}
+
+async function deleteAssignmentFromSupabase(pid) {
+  if (!CONFIG.SUPABASE_URL) return;
+  try {
+    await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/assignments?property_id=eq.${encodeURIComponent(pid)}`, {
+      method: 'DELETE',
+      headers: supabaseHeaders(),
+    });
+  } catch(e) { console.warn('Supabase assignment delete error:', e); }
+}
+
+// =============================================
+// ローカルストレージ（Supabase未設定時のフォールバック）
+// =============================================
+function saveStaffToStorage() {
+  localStorage.setItem('shooting_map_staff', JSON.stringify(staffList));
+}
+function loadStaffFromStorage() {
+  try {
+    const s = localStorage.getItem('shooting_map_staff');
+    staffList = s ? JSON.parse(s) : [];
+  } catch { staffList = []; }
+}
+function saveAssignmentsToStorage() {
+  localStorage.setItem('shooting_map_assignments', JSON.stringify(assignments));
+}
+function loadAssignmentsFromStorage() {
+  try {
+    const s = localStorage.getItem('shooting_map_assignments');
+    assignments = s ? JSON.parse(s) : {};
+  } catch { assignments = {}; }
+}
+
+// スプシ自動登録による不正な担当者データをクリーンアップ（"6/19 晴れ予定"等が紛れ込んだケース対策）
+function cleanupInvalidSheetStaff() {
+  const invalidNamePatterns = [
+    /^\d/,
+    /予定|未定|希望|不明|要確認|なし|未|誰か|行く|決定|相談|連絡|確認中/,
+    /^[\d\/\-:：\s\n]+$/,
+  ];
+  const isInvalid = (name) => !name || name.length === 0 || name.length > 10 || invalidNamePatterns.some(p => p.test(name));
+
+  // staff_sheet_ プレフィックスで自動生成され、かつ名前が不正なものを除去
+  const invalidIds = new Set();
+  staffList = staffList.filter(s => {
+    if (s.id.startsWith('staff_sheet_') && isInvalid(s.name)) {
+      invalidIds.add(s.id);
+      return false;
+    }
+    return true;
+  });
+  // 該当する割り当ても削除
+  let removed = 0;
+  Object.keys(assignments).forEach(pid => {
+    if (invalidIds.has(assignments[pid].staffId)) {
+      delete assignments[pid];
+      deleteAssignmentFromSupabase(pid);
+      removed++;
+    }
+  });
+  if (invalidIds.size > 0) {
+    saveStaffToStorage();
+    saveAssignmentsToStorage();
+    invalidIds.forEach(id => deleteStaffFromSupabase(id));
+    console.log(`🧹 不正な自動登録担当者を${invalidIds.size}件削除、割り当て${removed}件解除`);
+  }
+}
+
+// =============================================
+// 週カレンダー
+// =============================================
+
+// =============================================
+// データ更新
+// =============================================
+async function refreshData() {
+  showToast('🔄 データを更新中…');
+  markers.forEach(m => {
+    m.marker.setMap(null);
+    if (m.keyMarker) m.keyMarker.setMap(null);
+    if (m.keyLine) m.keyLine.setMap(null);
+  });
+  markers = [];
+
+  // スプシから最新データを再取得
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('loading').querySelector('p').textContent = 'スプシから物件データを読み込み中…';
+  const sheetProps = await loadFromSheet();
+  if (sheetProps && sheetProps.length > 0) {
+    propertiesData = sheetProps;
+    applySheetPhotographers(sheetProps);
+    showToast(`📊 スプシから${sheetProps.length}件更新しました`);
+  } else {
+    showToast('⚠️ スプシ読み込み失敗。前のデータを使用します');
+  }
+
+  document.getElementById('prop-count').textContent = propertiesData.length;
+  geocodeAndPlaceMarkers();
+}
+
+function updateTimeLabel() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('update-time').textContent = `更新: ${h}:${m}:${s}`;
+}
+
+// =============================================
+// トースト
+// =============================================
+// =============================================
+// SP: サイドバー開閉
+// =============================================
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebar-overlay');
+  const isOpen = sb.classList.contains('open');
+  if (isOpen) {
+    closeSidebar();
+  } else {
+    sb.classList.add('open');
+    ov.classList.add('visible');
+  }
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('visible');
+}
+
+// 担当者選択後にSPではドロワーを閉じる
+function selectStaffAndClose(staff) {
+  selectedStaff = staff;
+  showCurrentBadge(staff);
+  // SP幅のときだけ閉じる
+  if (window.innerWidth <= 640) closeSidebar();
+}
+
+let toastTimer = null;
+// =============================================
+// 担当者ビュー（リストパネル）
+// =============================================
+function updateListStaffSelect() {
+  const sel = document.getElementById('list-staff-select');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">👤 担当者を選択</option>';
+  staffList.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = s.name;
+    sel.appendChild(opt);
+  });
+  if (prev && staffList.some(s => s.id === prev)) sel.value = prev;
+}
+
+function renderListPanel(staffId) {
+  const body = document.getElementById('list-panel-body');
+  if (!body) return;
+
+  if (!staffId) {
+    body.innerHTML = '<div class="list-empty">担当者を選択してください</div>';
+    return;
+  }
+
+  const staff = staffList.find(s => s.id === staffId);
+  if (!staff) return;
+
+  // この担当者の物件を取得（スプシのphotographer欄を優先、空の場合のみ手動割り当てを参照）
+  let props = markers
+    .map(m => m.prop)
+    .filter(p => {
+      const sheetText = (p.photographer || '').trim();
+      const pid = propId(p);
+      const assign = assignments[pid];
+      if (sheetText) {
+        return sheetText.startsWith(staff.name) || sheetText.includes(staff.name);
+      } else {
+        return !!(assign && assign.staffName === staff.name);
+      }
+    });
+
+  if (props.length === 0) {
+    body.innerHTML = `<div class="list-empty">${staff.name} さんの担当物件はありません</div>`;
+    return;
+  }
+
+  // 訪問順に並び替え
+  const order = visitOrder[staffId] || [];
+  props.sort((a, b) => {
+    const ia = order.indexOf(propId(a));
+    const ib = order.indexOf(propId(b));
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  const doneCount = props.filter(p => completions[propId(p)]).length;
+  const total = props.length;
+
+  let html = `<div style="padding:6px 4px 10px;font-size:12px;color:#666;">
+    完了 ${doneCount}/${total}件
+    <span style="font-size:10px;color:#bbb;margin-left:8px;">☰ ドラッグで並び替え</span>
+    <div style="height:4px;background:#eee;border-radius:2px;margin-top:6px;">
+      <div style="height:4px;background:#43a047;border-radius:2px;width:${total ? Math.round(doneCount/total*100) : 0}%;transition:width 0.3s;"></div>
+    </div>
+  </div>`;
+
+  props.forEach((prop, idx) => {
+    const pid = propId(prop);
+    const isDone = !!completions[pid];
+    const assign = assignments[pid];
+    const keyBadge = prop.key_type === '鍵借' ? `<div class="list-card-key">🔑 鍵借 ${prop.key_time || ''} ${prop.key_address || ''}</div>` :
+                     prop.key_type === '立会' ? `<div class="list-card-key">👤 立会 ${prop.key_time || ''}</div>` : '';
+
+    html += `<div class="list-card${isDone ? ' done' : ''}" id="card-${pid}" draggable="true" data-pid="${pid}" data-staff="${staffId}">
+      <div class="list-card-header">
+        <div class="list-drag-handle" title="ドラッグして並び替え">☰</div>
+        <div class="list-card-order">${idx + 1}</div>
+        <div style="flex:1;">
+          <div class="list-card-name">${prop.name}</div>
+          ${prop.room ? `<div class="list-card-room">${prop.room}</div>` : ''}
+        </div>
+        ${isDone ? '<span style="font-size:16px;">✅</span>' : ''}
+      </div>
+      ${keyBadge}
+      <div class="list-card-info"><span class="label">📍</span><span>${prop.address || '住所なし'}</span></div>
+      ${prop.tel ? `<div class="list-card-info"><span class="label">📞</span><span>${prop.tel}</span></div>` : ''}
+      ${assign?.date ? `<div class="list-card-info"><span class="label">📅</span><span>${assign.date}</span></div>` : ''}
+      <div class="list-card-actions">
+        <button class="btn-card-loc" onclick="focusMarker('${pid}')">📍 位置</button>
+        <button class="btn-card-nav" onclick="navToFromList('${prop.address}')">🧭 ナビ</button>
+        <button class="btn-card-done${isDone ? ' done-active' : ''}" onclick="toggleCompletion('${pid}', '${staffId}')">
+          ${isDone ? '✅' : '○ 完了'}
+        </button>
+      </div>
+    </div>`;
+  });
+
+  body.innerHTML = html;
+
+  // ピンに訪問順番号を表示
+  updateMarkersOrder(staffId);
+
+  // カード名クリックで地図にフォーカス
+  body.querySelectorAll('.list-card[data-pid]').forEach(card => {
+    card.querySelector('.list-card-name')?.addEventListener('click', () => {
+      focusMarker(card.dataset.pid);
+    });
+  });
+
+  // ドラッグ＆ドロップで並び替え
+  initListDragSort(body, staffId);
+}
+
+// ドラッグ並び替え
+let dragSrcEl = null;
+
+function initListDragSort(container, staffId) {
+  const cards = container.querySelectorAll('.list-card[draggable]');
+
+  cards.forEach(card => {
+    card.addEventListener('dragstart', e => {
+      dragSrcEl = card;
+      card.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => {
+      card.style.opacity = '';
+      container.querySelectorAll('.list-card').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      container.querySelectorAll('.list-card').forEach(c => c.classList.remove('drag-over'));
+      if (card !== dragSrcEl) card.classList.add('drag-over');
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrcEl || dragSrcEl === card) return;
+
+      // DOM上の順番に合わせてvisitOrderを更新
+      const allCards = [...container.querySelectorAll('.list-card[data-pid]')];
+      const fromIdx = allCards.indexOf(dragSrcEl);
+      const toIdx = allCards.indexOf(card);
+
+      // DOMを入れ替え
+      if (fromIdx < toIdx) {
+        card.after(dragSrcEl);
+      } else {
+        card.before(dragSrcEl);
+      }
+
+      // 新しい順番を取得してvisitOrderに保存
+      const newOrder = [...container.querySelectorAll('.list-card[data-pid]')]
+        .map(c => c.dataset.pid);
+      visitOrder[staffId] = newOrder;
+      saveVisitOrder();
+
+      // 番号を振り直し
+      container.querySelectorAll('.list-card[data-pid]').forEach((c, i) => {
+        const orderEl = c.querySelector('.list-card-order');
+        if (orderEl) orderEl.textContent = i + 1;
+      });
+
+      card.classList.remove('drag-over');
+      showToast('📋 順番を保存しました');
+      updateMarkersOrder(staffId);
+    });
+
+    // スマホ用：長押しでドラッグモードに（タッチ操作）
+    card.addEventListener('touchstart', handleTouchStart, { passive: true });
+    card.addEventListener('touchmove', handleTouchMove, { passive: false });
+    card.addEventListener('touchend', handleTouchEnd);
+  });
+}
+
+// タッチ操作でのドラッグ並び替え
+let touchDragCard = null;
+let touchClone = null;
+let touchStartY = 0;
+let touchStaffId = null;
+
+function handleTouchStart(e) {
+  const handle = e.target.closest('.list-drag-handle');
+  if (!handle) return;
+  touchDragCard = e.currentTarget;
+  touchStaffId = touchDragCard.dataset.staff;
+  touchStartY = e.touches[0].clientY;
+  touchDragCard.style.opacity = '0.4';
+
+  // クローンで追従表示
+  touchClone = touchDragCard.cloneNode(true);
+  touchClone.style.cssText = `position:fixed;left:${touchDragCard.getBoundingClientRect().left}px;top:${touchDragCard.getBoundingClientRect().top}px;width:${touchDragCard.offsetWidth}px;opacity:0.85;z-index:9999;pointer-events:none;border:2px solid #4285f4;border-radius:10px;background:#fff;`;
+  document.body.appendChild(touchClone);
+}
+
+function handleTouchMove(e) {
+  if (!touchDragCard || !touchClone) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const dy = touch.clientY - touchStartY;
+  touchClone.style.top = (parseFloat(touchClone.style.top) + dy) + 'px';
+  touchStartY = touch.clientY;
+
+  // ホバー中のカードを検出
+  const body = document.getElementById('list-panel-body');
+  if (!body) return;
+  body.querySelectorAll('.list-card').forEach(c => c.classList.remove('drag-over'));
+  const el = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.list-card');
+  if (el && el !== touchDragCard) el.classList.add('drag-over');
+}
+
+function handleTouchEnd(e) {
+  if (!touchDragCard) return;
+  if (touchClone) { touchClone.remove(); touchClone = null; }
+  touchDragCard.style.opacity = '';
+
+  const body = document.getElementById('list-panel-body');
+  if (!body) { touchDragCard = null; return; }
+
+  const target = body.querySelector('.list-card.drag-over');
+  body.querySelectorAll('.list-card').forEach(c => c.classList.remove('drag-over'));
+
+  if (target && target !== touchDragCard) {
+    const allCards = [...body.querySelectorAll('.list-card[data-pid]')];
+    const fromIdx = allCards.indexOf(touchDragCard);
+    const toIdx = allCards.indexOf(target);
+    if (fromIdx < toIdx) target.after(touchDragCard);
+    else target.before(touchDragCard);
+
+    const newOrder = [...body.querySelectorAll('.list-card[data-pid]')].map(c => c.dataset.pid);
+    if (touchStaffId) {
+      visitOrder[touchStaffId] = newOrder;
+      saveVisitOrder();
+    }
+    body.querySelectorAll('.list-card[data-pid]').forEach((c, i) => {
+      const o = c.querySelector('.list-card-order');
+      if (o) o.textContent = i + 1;
+    });
+    showToast('📋 順番を保存しました');
+    updateMarkersOrder(touchStaffId);
+  }
+  touchDragCard = null;
+  touchStaffId = null;
+}
+
+// 訪問順番号をマーカーに反映
+function updateMarkersOrder(staffId) {
+  if (!staffId) return;
+  const staff = staffList.find(s => s.id === staffId);
+  if (!staff) return;
+
+  // この担当者の物件を訪問順で取得
+  const order = visitOrder[staffId] || [];
+  let props = markers
+    .map(m => m.prop)
+    .filter(p => {
+      const sheetText = (p.photographer || '').trim();
+      const pid = propId(p);
+      const assign = assignments[pid];
+      return sheetText ? (sheetText.startsWith(staff.name) || sheetText.includes(staff.name))
+                       : !!(assign && assign.staffName === staff.name);
+    });
+  props.sort((a, b) => {
+    const ia = order.indexOf(propId(a));
+    const ib = order.indexOf(propId(b));
+    if (ia === -1 && ib === -1) return 0;
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+
+  // まず全マーカーの順番バッジをクリア
+  markers.forEach(entry => {
+    if (entry._orderNum) {
+      entry._orderNum = null;
+      updateMarkerColor(entry.prop);
+    }
+  });
+
+  // 訪問順バッジを付与
+  props.forEach((prop, idx) => {
+    const entry = markers.find(m => m.prop === prop);
+    if (entry) {
+      entry._orderNum = idx + 1;
+      updateMarkerColor(prop);
+    }
+  });
+}
+
+// =============================================
+// 完了チェック
+// =============================================
+function toggleCompletion(pid, staffId) {
+  if (completions[pid]) {
+    delete completions[pid];
+  } else {
+    completions[pid] = true;
+  }
+  saveCompletions();
+  updateMarkerCompletion(pid);
+  renderListPanel(staffId || document.getElementById('list-staff-select')?.value);
+  showToast(completions[pid] ? '✅ 完了にしました' : '↩️ 完了を取り消しました');
+}
+
+function updateMarkerCompletion(pid) {
+  const entry = markers.find(m => propId(m.prop) === pid);
+  if (!entry) return;
+  const isDone = !!completions[pid];
+  // ピンの不透明度とグレースケールをCSSで制御
+  const el = entry.marker.getElement ? entry.marker.getElement() : null;
+  if (el) {
+    el.style.opacity = isDone ? '0.35' : '1';
+    el.style.filter = isDone ? 'grayscale(100%)' : '';
+  } else {
+    // 通常のMarkerの場合はopacityで
+    entry.marker.setOpacity(isDone ? 0.35 : 1.0);
+  }
+}
+
+function saveCompletions() {
+  localStorage.setItem('shooting_map_completions', JSON.stringify(completions));
+}
+
+function loadCompletions() {
+  try {
+    const s = localStorage.getItem('shooting_map_completions');
+    completions = s ? JSON.parse(s) : {};
+  } catch { completions = {}; }
+}
+
+function saveVisitOrder() {
+  localStorage.setItem('shooting_map_visit_order', JSON.stringify(visitOrder));
+}
+
+function loadVisitOrder() {
+  try {
+    const s = localStorage.getItem('shooting_map_visit_order');
+    visitOrder = s ? JSON.parse(s) : {};
+  } catch { visitOrder = {}; }
+}
+
+// =============================================
+function focusMarker(pid) {
+  const entry = markers.find(m => propId(m.prop) === pid);
+  if (!entry) return;
+  map.panTo(entry.location);
+  entry.marker.setAnimation(google.maps.Animation.BOUNCE);
+  setTimeout(() => entry.marker.setAnimation(null), 1400);
+}
+
+// リストパネルからGoogleマップナビ起動
+// =============================================
+function navToFromList(address) {
+  if (!address) return;
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}&travelmode=driving`;
+  window.open(url, '_blank');
+}
+
+// =============================================
+// よく使う場所
+// =============================================
+let savedPlaces = []; // [{id, name, address}]
+let editingPlaceId = null;
+
+const PLACE_ICONS = ['🏠','🏢','🚉','⭐','📍','🏪','🏫','🏥'];
+
+function loadSavedPlaces() {
+  try {
+    const s = localStorage.getItem('shooting_map_places');
+    savedPlaces = s ? JSON.parse(s) : [];
+  } catch { savedPlaces = []; }
+}
+
+function saveSavedPlaces() {
+  localStorage.setItem('shooting_map_places', JSON.stringify(savedPlaces));
+}
+
+function renderPlacesList() {
+  const list = document.getElementById('places-list');
+  if (!list) return;
+  if (savedPlaces.length === 0) {
+    list.innerHTML = '<div style="font-size:11px;color:#bbb;padding:4px 0;">登録された場所はありません</div>';
+  } else {
+    list.innerHTML = savedPlaces.map((p, i) => `
+      <div class="place-item">
+        <span class="place-item-icon">${PLACE_ICONS[i % PLACE_ICONS.length]}</span>
+        <div class="place-item-info">
+          <div class="place-item-name">${p.name}</div>
+          <div class="place-item-addr">${p.address}</div>
+        </div>
+        <button class="btn-place-nav" onclick="setStartPlace('${p.id}')" title="ナビ出発地に設定">🚩 出発</button>
+        <button class="btn-place-edit" onclick="editPlace('${p.id}')" title="編集">✏️</button>
+        <button class="btn-place-del" onclick="deletePlace('${p.id}')" title="削除">✕</button>
+      </div>`).join('');
+  }
+  updateNavStartPlacesSelect();
+}
+
+function updateNavStartPlacesSelect() {
+  const sel = document.getElementById('nav-start-places');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">📍 場所を選択</option>';
+  savedPlaces.forEach((p, i) => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${PLACE_ICONS[i % PLACE_ICONS.length]} ${p.name}`;
+    sel.appendChild(opt);
+  });
+  sel.value = '';
+}
+
+function showAddPlaceForm(name = '', addr = '') {
+  editingPlaceId = null;
+  document.getElementById('place-name-input').value = name;
+  document.getElementById('place-addr-input').value = addr;
+  document.getElementById('add-place-form').style.display = 'block';
+  document.getElementById('place-name-input').focus();
+}
+
+function hideAddPlaceForm() {
+  editingPlaceId = null;
+  document.getElementById('add-place-form').style.display = 'none';
+  document.getElementById('place-name-input').value = '';
+  document.getElementById('place-addr-input').value = '';
+}
+
+function savePlace() {
+  const name = document.getElementById('place-name-input').value.trim();
+  const address = document.getElementById('place-addr-input').value.trim();
+  if (!name) { showToast('名前を入力してください'); return; }
+  if (!address) { showToast('住所を入力してください'); return; }
+
+  if (editingPlaceId) {
+    const idx = savedPlaces.findIndex(p => p.id === editingPlaceId);
+    if (idx >= 0) savedPlaces[idx] = { ...savedPlaces[idx], name, address };
+  } else {
+    savedPlaces.push({ id: 'place_' + Date.now(), name, address });
+  }
+  saveSavedPlaces();
+  renderPlacesList();
+  hideAddPlaceForm();
+  showToast(`📍 「${name}」を保存しました`);
+}
+
+function editPlace(id) {
+  const place = savedPlaces.find(p => p.id === id);
+  if (!place) return;
+  editingPlaceId = id;
+  document.getElementById('place-name-input').value = place.name;
+  document.getElementById('place-addr-input').value = place.address;
+  document.getElementById('add-place-form').style.display = 'block';
+  document.getElementById('place-name-input').focus();
+}
+
+function deletePlace(id) {
+  const place = savedPlaces.find(p => p.id === id);
+  if (!place) return;
+  savedPlaces = savedPlaces.filter(p => p.id !== id);
+  saveSavedPlaces();
+  renderPlacesList();
+  showToast(`🗑️ 「${place.name}」を削除しました`);
+}
+
+// ナビ出発地に設定
+function setStartPlace(id) {
+  const place = savedPlaces.find(p => p.id === id);
+  if (!place) return;
+  document.getElementById('nav-start-input').value = place.address;
+  showToast(`🚩 出発地を「${place.name}」に設定しました`);
+  // ナビモードに切り替え
+  setMode('nav');
+  closeSidebar();
+}
+
+// ナビバーのドロップダウンから選択
+function selectStartPlace(id) {
+  if (!id) return;
+  const place = savedPlaces.find(p => p.id === id);
+  if (!place) return;
+  document.getElementById('nav-start-input').value = place.address;
+  document.getElementById('nav-start-places').value = '';
+  showToast(`🚩 出発地を「${place.name}」に設定しました`);
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+
+<!-- Google Maps API -->
+<script async defer
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD6zMhACB22Lgs_RJtQnfDAxuuX4jK235k&libraries=geometry,places&callback=initMap&language=ja">
+</script>
+
+</body>
+</html>
