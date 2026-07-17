@@ -980,8 +980,8 @@ function buildMarkerIcon(fillColor, borderColor, isKouji, isKarikari, keyWarning
 }
 
 function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning, staffName, otherCount, orderNum) {
-  const CRYSTAL_W = isKouji ? 20 : 28;
-  const STROKE = 2.5;
+  const PIN_W = isKouji ? 15 : 18;
+  const STROKE = 1.8;
   const TOP_PAD = 8;
   const SIDE_PAD = 8;
 
@@ -999,94 +999,88 @@ function createMarkerSVG(fillColor, borderColor, isKouji, isKarikari, keyWarning
       otherLabel = (!isNaN(n) && n > 0) ? String(Math.min(n, 99)) : '!';
     }
   }
-  const OTHER_R = 12;
+  const OTHER_R = 11;
 
   const badgeRowH = Math.max(nameText ? nameBadgeH + 6 : 0, hasOther ? OTHER_R * 2 + 6 : 0);
-  const crystalH = isKouji ? 44 : 50;
   const pinTop = TOP_PAD + badgeRowH;
-  const pinTipY = pinTop + crystalH;
-  const midY = pinTop + crystalH * 0.44;
 
-  const leftPad = SIDE_PAD + (nameText ? Math.max(0, nameBadgeW * 0.45) : 0);
-  const rightPad = SIDE_PAD + (hasOther ? OTHER_R + 10 : 0);
-  const pinCX = leftPad + CRYSTAL_W / 2;
+  const r = PIN_W / 2;
+  const taper = isKouji ? 18 : 22;
+  const pinTipY = pinTop + r + taper;
+  const PIN_H = r + taper;
+  const headCY = pinTop + r;
 
-  const totalW = leftPad + CRYSTAL_W + rightPad;
-  const totalH = pinTipY + 6;
+  const leftPad = SIDE_PAD + (nameText ? Math.max(0, nameBadgeW * 0.40) : 0);
+  const rightPad = SIDE_PAD + (hasOther ? OTHER_R + 8 : 0);
+  const pinCX = leftPad + PIN_W / 2;
+
+  const totalW = leftPad + PIN_W + rightPad;
+  const totalH = pinTipY + 4;
 
   const anchorX = pinCX;
   const anchorY = pinTipY;
 
-  const half = CRYSTAL_W / 2;
+  const lx = pinCX - r;
+  const rx = pinCX + r;
   const uid = 'm' + Math.random().toString(36).slice(2, 9);
 
-  // ひし形クリスタル本体
-  const pinPath = `M${pinCX} ${pinTop} L${pinCX + half} ${midY} L${pinCX} ${pinTipY} L${pinCX - half} ${midY} Z`;
+  // 参考画像どおり：上は正円の半分、下はすっと細く尖る逆雫
+  const midY = headCY + taper * 0.52;
+  const pinPath = `M${lx} ${headCY}`
+    + ` A${r} ${r} 0 0 1 ${rx} ${headCY}`
+    + ` Q${rx + 0.6} ${midY} ${pinCX} ${pinTipY}`
+    + ` Q${lx - 0.6} ${midY} ${lx} ${headCY} Z`;
 
-  const strokeColor = keyWarning ? '#c62828' : (isKouji ? '#111' : borderColor);
+  const strokeColor = keyWarning ? '#c62828' : (isKouji ? '#222' : borderColor);
   const pinFill = isKouji ? '#1e1e2e' : fillColor;
-  const pinFillTop = isKouji ? '#6a6a8a' : brightenHex(fillColor);
-  const pinFillMid = isKouji ? '#3a3a52' : fillColor;
+  const pinFillTop = isKouji ? '#555570' : brightenHex(fillColor);
 
-  const iconCY = pinTop + crystalH * 0.30;
+  const holeCY = pinTop + r * 0.72;
+  const holeR = r * 0.30;
   let pinInner = '';
   if (isKouji) {
-    pinInner = `<text x="${pinCX}" y="${iconCY + 4}" text-anchor="middle" font-size="11" font-weight="800" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">工</text>`;
+    pinInner = `<text x="${pinCX}" y="${holeCY + 3}" text-anchor="middle" font-size="8" font-weight="800" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">工</text>`;
   } else if (keyWarning) {
-    pinInner = `<text x="${pinCX}" y="${iconCY + 5}" text-anchor="middle" font-size="13" font-family="sans-serif">⚠</text>`;
+    pinInner = `<text x="${pinCX}" y="${holeCY + 3.5}" text-anchor="middle" font-size="10" font-family="sans-serif">⚠</text>`;
   } else if (isKarikari) {
-    pinInner = `<text x="${pinCX}" y="${iconCY + 5}" text-anchor="middle" font-size="12" font-family="sans-serif">🔑</text>`;
+    pinInner = `<text x="${pinCX}" y="${holeCY + 3.5}" text-anchor="middle" font-size="9" font-family="sans-serif">🔑</text>`;
   } else {
-    pinInner = `<circle cx="${pinCX}" cy="${iconCY}" r="4.5" fill="#fff" opacity="0.92"/>`;
+    pinInner = `<circle cx="${pinCX}" cy="${holeCY}" r="${holeR}" fill="none" stroke="#fff" stroke-width="1.6" opacity="0.92"/>`;
   }
 
-  // クリスタル面取りハイライト
-  const facetInner = `
-    <path d="M${pinCX} ${pinTop + 2} L${pinCX - half * 0.55} ${midY - 1} L${pinCX} ${pinTipY - 6} Z" fill="rgba(255,255,255,0.22)"/>
-    <path d="M${pinCX} ${pinTop + 2} L${pinCX + half * 0.55} ${midY - 1} L${pinCX} ${pinTipY - 6} Z" fill="rgba(0,0,0,0.08)"/>
-    <line x1="${pinCX}" y1="${pinTop + 3}" x2="${pinCX}" y2="${pinTipY - 4}" stroke="rgba(255,255,255,0.28)" stroke-width="0.9"/>
-    <line x1="${pinCX - half * 0.7}" y1="${midY}" x2="${pinCX + half * 0.7}" y2="${midY}" stroke="rgba(255,255,255,0.18)" stroke-width="0.7"/>
-  `;
-
-  const nameX = pinCX - nameBadgeW / 2 - (hasOther ? 8 : 0);
+  const nameX = pinCX - nameBadgeW / 2 - (hasOther ? 6 : 0);
   const nameY = TOP_PAD;
   const nameSVG = nameText ? `
     <rect x="${nameX}" y="${nameY}" width="${nameBadgeW}" height="${nameBadgeH}" rx="11" fill="#1a1a2e" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
     <text x="${nameX + nameBadgeW / 2}" y="${nameY + 15}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" font-family="'Hiragino Sans','Meiryo',sans-serif">${nameText}</text>` : '';
 
-  const otherCX = pinCX + half + 4;
-  const otherCY = pinTop + crystalH * 0.22;
-  const otherFontSize = otherLabel.length > 1 ? 10 : 13;
+  const otherCX = pinCX + r + 3;
+  const otherCY = pinTop + r * 0.55;
+  const otherFontSize = otherLabel.length > 1 ? 9 : 12;
   const otherSVG = hasOther ? `
-    <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R}" fill="#fff" stroke="#e53935" stroke-width="2.5"/>
-    <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R - 4}" fill="#e53935"/>
-    <text x="${otherCX}" y="${otherCY + (otherLabel.length > 1 ? 3.5 : 4.5)}" text-anchor="middle" font-size="${otherFontSize}" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${otherLabel}</text>` : '';
+    <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R}" fill="#fff" stroke="#e53935" stroke-width="2"/>
+    <circle cx="${otherCX}" cy="${otherCY}" r="${OTHER_R - 3.5}" fill="#e53935"/>
+    <text x="${otherCX}" y="${otherCY + (otherLabel.length > 1 ? 3 : 4)}" text-anchor="middle" font-size="${otherFontSize}" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${otherLabel}</text>` : '';
 
   const orderCX = pinCX;
-  const orderCY = pinTipY + 2;
+  const orderCY = pinTipY - 2;
   const orderSVG = orderNum ? `
-    <circle cx="${orderCX}" cy="${orderCY}" r="10" fill="#1565c0" stroke="#fff" stroke-width="2"/>
-    <text x="${orderCX}" y="${orderCY + 4}" text-anchor="middle" font-size="11" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${orderNum}</text>` : '';
+    <circle cx="${orderCX}" cy="${orderCY}" r="8" fill="#1565c0" stroke="#fff" stroke-width="2"/>
+    <text x="${orderCX}" y="${orderCY + 3.5}" text-anchor="middle" font-size="9" font-weight="900" fill="#fff" font-family="Arial,sans-serif">${orderNum}</text>` : '';
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${totalW}" height="${totalH}" viewBox="0 0 ${totalW} ${totalH}">
     <defs>
-      <filter id="${uid}sh" x="-30%" y="-20%" width="160%" height="160%">
-        <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#000" flood-opacity="0.35"/>
+      <filter id="${uid}sh" x="-35%" y="-8%" width="170%" height="145%">
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.6" flood-color="#000" flood-opacity="0.26"/>
       </filter>
-      <linearGradient id="${uid}g" x1="15%" y1="0%" x2="85%" y2="100%">
+      <linearGradient id="${uid}g" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="${pinFillTop}"/>
-        <stop offset="45%" stop-color="${pinFillMid}"/>
+        <stop offset="50%" stop-color="${pinFill}"/>
         <stop offset="100%" stop-color="${pinFill}"/>
-      </linearGradient>
-      <linearGradient id="${uid}shine" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#fff" stop-opacity="0.45"/>
-        <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <g filter="url(#${uid}sh)">
-      <path d="${pinPath}" fill="url(#${uid}g)" stroke="${strokeColor}" stroke-width="${STROKE}" stroke-linejoin="miter"/>
-      ${facetInner}
-      <path d="M${pinCX - half * 0.35} ${pinTop + 4} L${pinCX - half * 0.05} ${pinTop + crystalH * 0.18} L${pinCX - half * 0.25} ${midY - 4} Z" fill="url(#${uid}shine)"/>
+      <path d="${pinPath}" fill="url(#${uid}g)" stroke="${strokeColor}" stroke-width="${STROKE}" stroke-linejoin="round" stroke-linecap="round"/>
       ${pinInner}
     </g>
     ${nameSVG}
